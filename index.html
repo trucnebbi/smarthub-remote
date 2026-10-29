@@ -128,44 +128,38 @@
 
   <script>
     const AIO_USERNAME = "trucnecooi";
-    const AIO_KEY      = "aio_ITja27IW4RBMTeTj39TIcMhnrIWd";
-    const AIO_TOPIC    = AIO_USERNAME.trim() + "/feeds/ir-command";
+  const AIO_KEY      = "aio_ITja27IW4RBMTeTj39TIcMhnrIWd";
+  const AIO_TOPIC    = AIO_USERNAME.trim() + "/feeds/ir-command";
 
-    // Cấu hình kết nối MQTT qua WebSocket mã hóa SSL chuẩn Adafruit IO
-    const options = {
-      host: 'io.adafruit.com',
-      port: 443,
-      protocol: 'wss',
-      path: '/mqtt',
-      username: AIO_USERNAME.trim(),
-      password: AIO_KEY.trim(),
-      clientId: 'web_' + Math.random().toString(36).substring(2, 8),
-      keepalive: 60,
-      reconnectPeriod: 3000,
-      connectTimeout: 30 * 1000,
-      clean: true
-    };
+  // Cấu hình options chứa authentication và client ID
+  const options = {
+    username: AIO_USERNAME.trim(),
+    password: AIO_KEY.trim(),
+    clientId: 'web_' + Math.random().toString(36).substring(2, 8),
+    keepalive: 60,
+    reconnectPeriod: 3000,
+    connectTimeout: 30 * 1000,
+    clean: true
+  };
 
-    console.log("⚡ Đang kết nối tới Adafruit IO...");
-    const client = mqtt.connect(options);
+  console.log("⚡ Đang kết nối tới Adafruit IO...");
+  
+  // TRUYỀN URL ĐẦY ĐỦ VÀO THAM SỐ ĐẦU TIÊN ĐỂ TRÁNH BỊ TRỎ VỀ LOCALHOST
+  const client = mqtt.connect('wss://io.adafruit.com:443/mqtt', options);
 
-    client.on('connect', function () {
-      document.getElementById('dot').className = 'status-dot online';
-      document.getElementById('status-text').innerText = 'Đã kết nối Cloud Adafruit IO!';
-      document.getElementById('status-text').style.color = '#2ecc71';
-      console.log("✅ Kết nối MQTT Adafruit IO thành công!");
-    });
+  client.on('connect', function () {
+    document.getElementById('dot').className = 'status-dot online';
+    document.getElementById('status-text').innerText = 'Đã kết nối Cloud Adafruit IO!';
+    document.getElementById('status-text').style.color = '#2ecc71';
+    console.log("✅ Kết nối MQTT Adafruit IO thành công!");
+  });
 
-    client.on('error', function (err) {
-      document.getElementById('dot').className = 'status-dot';
-      document.getElementById('status-text').innerText = 'Lỗi kết nối Cloud!';
-      document.getElementById('status-text').style.color = '#e74c3c';
-      console.error("❌ Lỗi MQTT:", err);
-    });
-
-    client.on('close', function () {
-      console.warn("⚠️ Mất kết nối tới Cloud. Đang tự động thử lại...");
-    });
+  client.on('error', function (err) {
+    document.getElementById('dot').className = 'status-dot';
+    document.getElementById('status-text').innerText = 'Lỗi kết nối Cloud!';
+    document.getElementById('status-text').style.color = '#e74c3c';
+    console.error("❌ Lỗi MQTT:", err);
+  });
 
     function sendCmd(commandStr) {
       if (client && client.connected) {
