@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SMART HUB CLOUD REMOTE</title>
+  <!-- Nhúng thư viện MQTT.js qua CDN -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; text-align: center; background: #0f111a; margin: 12px 0; color: #e0e0e0; }
+    .card { background: #181b26; max-width: 450px; margin: auto; padding: 18px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    .status-bar { background: #222634; padding: 10px; border-radius: 12px; margin-bottom: 15px; font-size: 13px; font-weight: bold; border: 1px solid #3d445e; }
+    .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #e74c3c; margin-right: 5px; }
+    .status-dot.online { background: #2ecc71; }
+
+    .remote-shell { background: #26161a; border: 2px solid #a8324a; border-radius: 24px; padding: 18px; margin: 10px auto; color: white; text-align: center; }
+    .remote-header { font-size: 17px; font-weight: bold; margin-bottom: 12px; color: #f1c40f; text-transform: uppercase; letter-spacing: 1px; }
+
+    .d-pad { position: relative; width: 160px; height: 160px; background: #2d3243; border-radius: 50%; margin: 15px auto; display: flex; align-items: center; justify-content: center; }
+    .d-btn { position: absolute; background: #3d445a; border: none; color: white; font-weight: bold; cursor: pointer; font-size: 14px; }
+    .d-btn:active { background: #f39c12; }
+    .d-up { top: 6px; left: 62px; width: 36px; height: 36px; border-radius: 50% 50% 0 0; }
+    .d-down { bottom: 6px; left: 62px; width: 36px; height: 36px; border-radius: 0 0 50% 50%; }
+    .d-left { left: 6px; top: 62px; width: 36px; height: 36px; border-radius: 50% 0 0 50%; }
+    .d-right { right: 6px; top: 62px; width: 36px; height: 36px; border-radius: 0 50% 50% 0; }
+    .d-ok { width: 68px; height: 68px; background: #4e5672; border-radius: 50%; font-weight: bold; font-size: 15px; color: #fff; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin: 8px 0; }
+    
+    .btn-cmd { background: #2f3545; color: #e0e0e0; border: 1px solid #454f68; padding: 12px; border-radius: 8px; font-size: 13px; font-weight: bold; cursor: pointer; }
+    .btn-cmd:active { background: #3498db; }
+    .btn-power { background: #c0392b; color: white; font-weight: bold; padding: 12px; border-radius: 10px; border: none; cursor: pointer; }
+
+    .pill-box { display: flex; flex-direction: column; background: #2a2f40; border-radius: 20px; overflow: hidden; width: 50px; margin: auto; }
+    .pill-box button { background: transparent; border: none; color: white; padding: 12px 0; font-weight: bold; font-size: 14px; cursor: pointer; }
+    .pill-box button:active { background: #3498db; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2 style="margin: 0 0 10px 0; color: #3498db;">🌐 SMART HUB CLOUD</h2>
+    
+    <!-- Trạng thái kết nối Cloud -->
+    <div class="status-bar">
+      <span id="dot" class="status-dot"></span>
+      <span id="status-text">Đang kết nối Cloud Adafruit IO...</span>
+    </div>
+
+    <!-- GIAO DIỆN REMOTE ĐẸP MẮT -->
+    <div class="remote-shell">
+      <div class="remote-header">TV LG (REMOTE CLOUD)</div>
+      
+      <div class="grid-2">
+        <button class="btn-power" onclick="sendCmd('0,power_toggle')">POWER</button>
+        <button class="btn-cmd" onclick="sendCmd('0,input')">INPUT</button>
+      </div>
+
+      <div class="d-pad">
+        <button class="d-btn d-up" onclick="sendCmd('0,up')">▲</button>
+        <button class="d-btn d-down" onclick="sendCmd('0,down')">▼</button>
+        <button class="d-btn d-left" onclick="sendCmd('0,left')">◄</button>
+        <button class="d-btn d-right" onclick="sendCmd('0,right')">►</button>
+        <button class="d-btn d-ok" onclick="sendCmd('0,select')">OK</button>
+      </div>
+
+      <div class="grid-3">
+        <button class="btn-cmd" onclick="sendCmd('0,back')">BACK</button>
+        <button class="btn-cmd" onclick="sendCmd('0,guide')">GUIDE</button>
+        <button class="btn-cmd" onclick="sendCmd('0,exit')">EXIT</button>
+      </div>
+
+      <div class="grid-3" style="align-items:center; margin-top:15px;">
+        <div class="pill-box">
+          <button onclick="sendCmd('0,vol_up')">VOL+</button>
+          <button onclick="sendCmd('0,vol_down')">VOL-</button>
+        </div>
+        <button class="btn-cmd" onclick="sendCmd('0,mute')">🔇 MUTE</button>
+        <div class="pill-box">
+          <button onclick="sendCmd('0,ch_up')">CH+</button>
+          <button onclick="sendCmd('0,ch_down')">CH-</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // THÔNG TIN TÀI KHOẢN ADAFRUIT IO CỦA BẠN
+    const AIO_USERNAME = "trucnecooi";
+    const AIO_KEY      = "aio_KVpd596Jfpl07nsFC7yAt02rJfnZ";
+    const AIO_TOPIC    = AIO_USERNAME + "/feeds/ir-command";
+
+    // Kết nối WebSocket MQTT tới Adafruit IO qua cổng 8884 (WSS)
+    const options = {
+      host: 'io.adafruit.com',
+      port: 8884,
+      protocol: 'wss',
+      username: AIO_USERNAME,
+      password: AIO_KEY,
+      clientId: 'WebRemote_' + Math.random().toString(16).substr(2, 8)
+    };
+
+    const client = mqtt.connect(options);
+
+    client.on('connect', function () {
+      document.getElementById('dot').className = 'status-dot online';
+      document.getElementById('status-text').innerText = 'Đã kết nối Cloud Adafruit IO!';
+      document.getElementById('status-text').style.color = '#2ecc71';
+    });
+
+    client.on('error', function (err) {
+      document.getElementById('dot').className = 'status-dot';
+      document.getElementById('status-text').innerText = 'Lỗi kết nối Cloud!';
+      document.getElementById('status-text').style.color = '#e74c3c';
+    });
+
+    // Hàm gửi lệnh IR qua Cloud khi bấm nút trên Giao diện Web
+    function sendCmd(commandStr) {
+      if (client.connected) {
+        client.publish(AIO_TOPIC, commandStr);
+        console.log("Đã gửi lệnh lên Cloud: " + commandStr);
+      } else {
+        alert("Chưa kết nối được Cloud, vui lòng kiểm tra lại mạng!");
+      }
+    }
+  </script>
+</body>
+</html>
