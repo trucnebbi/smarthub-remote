@@ -126,18 +126,18 @@
   </div>
 
   <script>
-    const AIO_USERNAME = "trucnecooi";
-    const AIO_KEY      = "aio_ITja27IW4RBMTeTj39TIcMhnrIWd"; // Key từ ảnh màn hình
+   const AIO_USERNAME = "trucnecooi";
+    const AIO_KEY      = "aio_ITja27IW4RBMTeTj39TIcMhnrIWd"; // Active Key từ hình ảnh
     const AIO_TOPIC    = AIO_USERNAME + "/feeds/ir-command";
 
     const options = {
       host: 'io.adafruit.com',
       port: 443,
       protocol: 'wss',
-      path: '/mqtt', // 👈 BẮT BUỘC PHẢI CÓ DÒNG NÀY ĐỂ ADAFRUIT BÓC TÁCH AUTH
-      username: AIO_USERNAME,
-      password: AIO_KEY,
-      clientId: 'web_' + Math.random().toString(36).substring(2, 10), // Random ID chuẩn
+      path: '/mqtt', // 👈 BẮT BUỘC PHẢI CÓ DÒNG NÀY ĐỂ ADAFRUIT BÓC TÁCH AUTHENTICATION
+      username: AIO_USERNAME.trim(),
+      password: AIO_KEY.trim(),
+      clientId: 'web_' + Math.random().toString(36).substring(2, 10),
       reconnectPeriod: 3000,
       connectTimeout: 30 * 1000
     };
