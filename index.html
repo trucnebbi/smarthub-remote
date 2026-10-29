@@ -1,4 +1,131 @@
-<script>
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SMART HUB CLOUD REMOTE PRO</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; text-align: center; background: #0f111a; margin: 12px 0; color: #e0e0e0; }
+    .card { background: #181b26; max-width: 480px; margin: auto; padding: 18px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    .status-bar { background: #222634; padding: 10px; border-radius: 12px; margin-bottom: 15px; font-size: 13px; font-weight: bold; border: 1px solid #3d445e; display: flex; align-items: center; justify-content: center; }
+    .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #e74c3c; margin-right: 8px; }
+    .status-dot.online { background: #2ecc71; }
+
+    .selector-box, .add-preset-box { background: #222634; padding: 12px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #3d445e; text-align: left; }
+    select, input { padding: 10px; font-size: 14px; width: 100%; border-radius: 8px; border: 1px solid #4a5475; font-weight: bold; color: #fff; background: #2c3246; box-sizing: border-box; margin-top: 6px; }
+    .btn-add { background: #3498db; color: white; border: none; padding: 10px; width: 100%; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 8px; }
+
+    .voice-box { background: linear-gradient(135deg, #d35400, #e67e22); border-radius: 14px; padding: 12px; margin-bottom: 15px; color: white; }
+    .btn-mic { background: #a04000; color: white; border: none; padding: 10px; font-size: 15px; border-radius: 25px; cursor: pointer; font-weight: bold; width: 100%; }
+    .btn-mic.recording { background: #c0392b; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.03); } 100% { transform: scale(1); } }
+
+    .remote-shell { border-radius: 24px; padding: 18px; margin: 10px auto; color: white; text-align: center; box-shadow: inset 0 0 10px rgba(255,255,255,0.05); }
+    .brand-lg { background: #26161a; border: 2px solid #a8324a; }
+    .brand-samsung { background: #101c2e; border: 2px solid #2980b9; }
+    .brand-tcl { background: #291b18; border: 2px solid #e67e22; }
+    .brand-panasonic { background: #162421; border: 2px solid #27ae60; }
+    .brand-sony { background: #1c1c1c; border: 2px solid #7f8c8d; }
+    .brand-ac { background: #112836; border: 2px solid #00a8ff; }
+    .brand-projector { background: #221f3b; border: 2px solid #8e44ad; }
+    .brand-generic { background: #212529; border: 2px solid #495057; }
+
+    .remote-header { font-size: 17px; font-weight: bold; margin-bottom: 12px; color: #f1c40f; text-transform: uppercase; letter-spacing: 1px; }
+
+    .d-pad { position: relative; width: 160px; height: 160px; background: #2d3243; border-radius: 50%; margin: 15px auto; display: flex; align-items: center; justify-content: center; }
+    .d-btn { position: absolute; background: #3d445a; border: none; color: white; font-weight: bold; cursor: pointer; font-size: 14px; }
+    .d-btn:active { background: #f39c12; }
+    .d-up { top: 6px; left: 62px; width: 36px; height: 36px; border-radius: 50% 50% 0 0; }
+    .d-down { bottom: 6px; left: 62px; width: 36px; height: 36px; border-radius: 0 0 50% 50%; }
+    .d-left { left: 6px; top: 62px; width: 36px; height: 36px; border-radius: 50% 0 0 50%; }
+    .d-right { right: 6px; top: 62px; width: 36px; height: 36px; border-radius: 0 50% 50% 0; }
+    .d-ok { width: 68px; height: 68px; background: #4e5672; border-radius: 50%; font-weight: bold; font-size: 15px; color: #fff; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin: 8px 0; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0; }
+
+    .btn-cmd { background: #2f3545; color: #e0e0e0; border: 1px solid #454f68; padding: 10px; border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer; }
+    .btn-cmd:active { background: #3498db; }
+    .btn-power { background: #c0392b; color: white; font-weight: bold; padding: 12px; border-radius: 10px; border: none; cursor: pointer; }
+    .btn-power-on { background: #27ae60; color: white; font-weight: bold; padding: 12px; border-radius: 10px; border: none; cursor: pointer; }
+
+    .color-btn { height: 20px; border-radius: 4px; border: none; cursor: pointer; }
+    .c-red { background: #e74c3c; } .c-green { background: #2ecc71; } .c-yellow { background: #f1c40f; } .c-blue { background: #3498db; }
+
+    .pill-box { display: flex; flex-direction: column; background: #2a2f40; border-radius: 20px; overflow: hidden; width: 48px; margin: auto; }
+    .pill-box button { background: transparent; border: none; color: white; padding: 12px 0; font-weight: bold; font-size: 13px; cursor: pointer; }
+
+    .ac-display { background: #000; border: 2px solid #00a8ff; border-radius: 12px; padding: 15px; margin-bottom: 15px; color: #00a8ff; font-family: monospace; }
+    .btn-reset-wifi { background: #d35400; color: white; font-weight: bold; padding: 10px; border-radius: 10px; border: none; cursor: pointer; width: 100%; margin-bottom: 12px; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2 style="margin: 0 0 10px 0; color: #3498db;">🌐 SMART HUB CLOUD PRO</h2>
+
+    <div class="status-bar">
+      <span id="dot" class="status-dot"></span>
+      <span id="status-text">Đang kết nối Cloud Adafruit IO...</span>
+    </div>
+
+    <button class="btn-reset-wifi" onclick="resetWiFiRemote()">🔄 RESET WI-FI GIA ĐÌNH (XÓA MẠNG)</button>
+
+    <div class="voice-box">
+      <button id="micBtn" class="btn-mic" onclick="toggleSpeechRecognition()">🎤 NÓI ĐỂ ĐIỀU KHIỂN CLOUD</button>
+      <p id="voiceStatus" style="font-size:12px; margin:5px 0 0 0;">Bấm nút và ra lệnh bằng giọng nói</p>
+    </div>
+
+    <div class="add-preset-box">
+      <h4 style="color:#3498db; margin:0 0 6px 0;">➕ Thêm Remote có sẵn</h4>
+      <input type="text" id="presetName" placeholder="Tên thiết bị..." required>
+      <select id="presetType">
+        <option value="0">Thiet bi hoc IR</option><option value="1">TV LG</option><option value="2">TV Samsung</option>
+        <option value="3">TV TCL (P715)</option><option value="4">TV TCL (RC833)</option><option value="5">TV Panasonic</option>
+        <option value="6">TV Sony</option><option value="7">TV VEON</option><option value="8">May lanh (Chung)</option>
+        <option value="9">May lanh Daikin</option><option value="10">May lanh Panasonic</option><option value="11">May lanh LG</option>
+        <option value="12">May lanh Gree/TCL</option><option value="13">May lanh Midea/Carrier</option><option value="14">May lanh Toshiba</option>
+        <option value="15">May chieu</option><option value="16">Loa Soundbar</option><option value="17">Robot hut bui</option>
+        <option value="18">Den Smart LED</option><option value="19">STB VU+ Duo2</option><option value="20">Apple TV</option><option value="21">O cam</option>
+      </select>
+      <button type="button" class="btn-add" onclick="addPresetCloud()">TẠO REMOTE MỚI</button>
+    </div>
+
+    <div class="selector-box">
+      <label style="font-size:13px; font-weight:bold; color:#a0aec0;">CHỌN MẪU GIAO DIỆN REMOTE:</label>
+      <select id="deviceSelector" onchange="changeDeviceTypeUI(this.value)">
+        <option value="0">Thiết bị học IR</option>
+        <option value="1" selected>TV LG (LG WebOS)</option>
+        <option value="2">TV Samsung (Smart TV)</option>
+        <option value="3">TV TCL (P715)</option>
+        <option value="4">TV TCL (RC833)</option>
+        <option value="5">TV Panasonic (Viera)</option>
+        <option value="6">TV Sony (Bravia)</option>
+        <option value="7">TV VEON</option>
+        <option value="8">Máy lạnh (Điều hòa các hãng)</option>
+        <option value="15">Máy chiếu (Projector)</option>
+        <option value="16">Loa Soundbar</option>
+        <option value="17">Robot hút bụi</option>
+        <option value="18">Đèn Smart LED</option>
+        <option value="19">STB VU+ Duo2</option>
+        <option value="20">Apple TV</option>
+        <option value="21">Ổ cắm thông minh</option>
+      </select>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+        <span style="color:#718096; font-size:12px;">Đang chọn: <b id="curDevLabel" style="color:#3498db;">TV LG</b></span>
+        <a href="javascript:void(0)" onclick="resetAllDevicesCloud()" style="color:#f39c12; font-size:12px; text-decoration:none; font-weight:bold;">⚠️ Xóa tất cả (Reset về 0)</a>
+      </div>
+    </div>
+
+    <!-- KHUNG CHỨA REMOTE SẼ THAY ĐỔI ĐẦY ĐỦ THEO THIẾT BỊ -->
+    <div id="remoteContainer"></div>
+
+  </div>
+
+  <script>
   const AIO_USERNAME = "trucnecooi";
   const AIO_KEY      = "aio_ITja27IW4RBMTeTj39TIcMhnrIWd";
   const AIO_TOPIC    = AIO_USERNAME.trim() + "/feeds/ir-command";
