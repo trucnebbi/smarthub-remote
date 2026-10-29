@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SMART HUB CLOUD REMOTE PRO</title>
-  <!-- Sử dụng bản CDN MQTT.js ổn định -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
   <style>
     body { font-family: 'Segoe UI', Arial, sans-serif; text-align: center; background: #0f111a; margin: 12px 0; color: #e0e0e0; }
@@ -121,45 +120,47 @@
       </div>
     </div>
 
-    <!-- Khung chứa remote thay đổi giao diện theo thiết bị được chọn -->
     <div id="remoteContainer"></div>
 
   </div>
 
   <script>
+    // Kiểm tra lại Username và Key trên io.adafruit.com
     const AIO_USERNAME = "trucnecooi";
-  const AIO_KEY      = "aio_ITja27IW4RBMTeTj39TIcMhnrIWd";
-  const AIO_TOPIC    = AIO_USERNAME.trim() + "/feeds/ir-command";
+    const AIO_KEY      = "aio_ITja27IW4RBMTeTj39TIcMhnrIWd"; 
+    const AIO_TOPIC    = AIO_USERNAME.trim() + "/feeds/ir-command";
 
-  // Cấu hình options chứa authentication và client ID
-  const options = {
-    username: AIO_USERNAME.trim(),
-    password: AIO_KEY.trim(),
-    clientId: 'web_' + Math.random().toString(36).substring(2, 8),
-    keepalive: 60,
-    reconnectPeriod: 3000,
-    connectTimeout: 30 * 1000,
-    clean: true
-  };
+    // Ghép tham số trực tiếp vào URL WebSocket dành cho MQTT.js trên Web
+    const connectUrl = `wss://io.adafruit.com:443/mqtt?username=${encodeURIComponent(AIO_USERNAME.trim())}&key=${encodeURIComponent(AIO_KEY.trim())}`;
 
-  console.log("⚡ Đang kết nối tới Adafruit IO...");
-  
-  // TRUYỀN URL ĐẦY ĐỦ VÀO THAM SỐ ĐẦU TIÊN ĐỂ TRÁNH BỊ TRỎ VỀ LOCALHOST
-  const client = mqtt.connect('wss://io.adafruit.com:443/mqtt', options);
+    const options = {
+      clientId: 'web_' + Math.random().toString(36).substring(2, 8),
+      keepalive: 60,
+      reconnectPeriod: 3000,
+      connectTimeout: 30 * 1000,
+      clean: true
+    };
 
-  client.on('connect', function () {
-    document.getElementById('dot').className = 'status-dot online';
-    document.getElementById('status-text').innerText = 'Đã kết nối Cloud Adafruit IO!';
-    document.getElementById('status-text').style.color = '#2ecc71';
-    console.log("✅ Kết nối MQTT Adafruit IO thành công!");
-  });
+    console.log("⚡ Đang kết nối tới Adafruit IO...");
+    const client = mqtt.connect(connectUrl, options);
 
-  client.on('error', function (err) {
-    document.getElementById('dot').className = 'status-dot';
-    document.getElementById('status-text').innerText = 'Lỗi kết nối Cloud!';
-    document.getElementById('status-text').style.color = '#e74c3c';
-    console.error("❌ Lỗi MQTT:", err);
-  });
+    client.on('connect', function () {
+      document.getElementById('dot').className = 'status-dot online';
+      document.getElementById('status-text').innerText = 'Đã kết nối Cloud Adafruit IO!';
+      document.getElementById('status-text').style.color = '#2ecc71';
+      console.log("✅ Kết nối MQTT Adafruit IO thành công!");
+    });
+
+    client.on('error', function (err) {
+      document.getElementById('dot').className = 'status-dot';
+      document.getElementById('status-text').innerText = 'Lỗi kết nối Cloud (Sai Key/Username)';
+      document.getElementById('status-text').style.color = '#e74c3c';
+      console.error("❌ Lỗi MQTT:", err);
+    });
+
+    client.on('close', function () {
+      console.warn("⚠️ Ngắt kết nối Cloud. Đang thử lại...");
+    });
 
     function sendCmd(commandStr) {
       if (client && client.connected) {
@@ -171,7 +172,7 @@
           }
         });
       } else {
-        alert("Chưa kết nối được Cloud, vui lòng kiểm tra lại kết nối mạng!");
+        alert("Chưa kết nối được Cloud, hãy kiểm tra lại Key hoặc mạng!");
       }
     }
 
@@ -206,7 +207,7 @@
       let container = document.getElementById("remoteContainer");
       let html = "";
 
-      if (typeVal === 0) { // THIẾT BỊ HỌC IR
+      if (typeVal === 0) {
         document.getElementById("curDevLabel").innerText = "Thiết bị học IR";
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">THIẾT BỊ HỌC IR TÙY CHỈNH</div>
@@ -217,7 +218,7 @@
           </div>
         </div>`;
       }
-      else if (typeVal === 1) { // TV LG
+      else if (typeVal === 1) {
         document.getElementById("curDevLabel").innerText = "TV LG";
         html = `<div class="remote-shell brand-lg">
           <div class="remote-header">TV LG (WEBOS)</div>
@@ -234,7 +235,7 @@
           <div class="grid-2" style="margin-top:10px;"><button class="btn-cmd" onclick="sendDevAction('list')">CH LIST</button><button class="btn-cmd" onclick="sendDevAction('livetv')">LIVE TV</button></div>
         </div>`;
       } 
-      else if (typeVal === 2) { // TV SAMSUNG
+      else if (typeVal === 2) {
         document.getElementById("curDevLabel").innerText = "TV Samsung";
         html = `<div class="remote-shell brand-samsung">
           <div class="remote-header">TV SAMSUNG (SMART)</div>
@@ -251,7 +252,7 @@
           <div class="grid-3" style="margin-top:10px;"><button class="btn-cmd" onclick="sendDevAction('emanual')">E-MANUAL</button><button class="btn-cmd" onclick="sendDevAction('mode3d')">3D</button><button class="btn-cmd" onclick="sendDevAction('prechn')">PRE-CHN</button></div>
         </div>`;
       }
-      else if (typeVal === 3) { // TV TCL P715
+      else if (typeVal === 3) {
         document.getElementById("curDevLabel").innerText = "TV TCL (P715)";
         html = `<div class="remote-shell brand-tcl">
           <div class="remote-header">TV TCL (55P715)</div>
@@ -267,7 +268,7 @@
           <button class="btn-cmd" style="width:100%; margin-top:10px; background:#e50914; color:white;" onclick="sendDevAction('netflix')">NETFLIX</button>
         </div>`;
       }
-      else if (typeVal === 4) { // TV TCL RC833
+      else if (typeVal === 4) {
         document.getElementById("curDevLabel").innerText = "TV TCL (RC833)";
         html = `<div class="remote-shell brand-tcl">
           <div class="remote-header">TV TCL (RC833)</div>
@@ -284,7 +285,7 @@
           <div class="grid-2"><button class="btn-cmd" style="background:#00a8e1; color:white;" onclick="sendDevAction('prime')">PRIME VIDEO</button><button class="btn-cmd" onclick="sendDevAction('tclchannel')">TCL CHANNEL</button></div>
         </div>`;
       }
-      else if (typeVal === 5) { // TV PANASONIC
+      else if (typeVal === 5) {
         document.getElementById("curDevLabel").innerText = "TV Panasonic";
         html = `<div class="remote-shell brand-panasonic">
           <div class="remote-header">PANASONIC VIERA</div>
@@ -300,7 +301,7 @@
           <div class="grid-3" style="margin-top:10px;"><button class="btn-cmd" onclick="sendDevAction('picture')">PICTURE</button><button class="btn-cmd" onclick="sendDevAction('help')">HELP</button><button class="btn-cmd" style="background:#e50914; color:white;" onclick="sendDevAction('netflix')">NETFLIX</button></div>
         </div>`;
       }
-      else if (typeVal === 6) { // TV SONY
+      else if (typeVal === 6) {
         document.getElementById("curDevLabel").innerText = "TV Sony";
         html = `<div class="remote-shell brand-sony">
           <div class="remote-header">SONY BRAVIA</div>
@@ -316,7 +317,7 @@
           <div class="grid-4" style="margin-top:10px;"><button class="btn-cmd" onclick="sendDevAction('hdmi1')">HDMI1</button><button class="btn-cmd" onclick="sendDevAction('hdmi2')">HDMI2</button><button class="btn-cmd" onclick="sendDevAction('hdmi3')">HDMI3</button><button class="btn-cmd" onclick="sendDevAction('hdmi4')">HDMI4</button></div>
         </div>`;
       }
-      else if (typeVal === 7) { // TV VEON
+      else if (typeVal === 7) {
         document.getElementById("curDevLabel").innerText = "TV VEON";
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">VEON TV</div>
@@ -330,7 +331,7 @@
           </div>
         </div>`;
       }
-      else if (typeVal >= 8 && typeVal <= 14) { // MÁY LẠNH (ĐIỀU HOÀ)
+      else if (typeVal >= 8 && typeVal <= 14) {
         document.getElementById("curDevLabel").innerText = "Máy lạnh";
         html = `<div class="remote-shell brand-ac">
           <div class="remote-header">MÁY LẠNH (ĐIỀU HOÀ)</div>
@@ -351,7 +352,7 @@
           </div>
         </div>`;
       }
-      else if (typeVal === 15) { // MÁY CHIẾU
+      else if (typeVal === 15) {
         document.getElementById("curDevLabel").innerText = "Máy chiếu";
         html = `<div class="remote-shell brand-projector">
           <div class="remote-header">MÁY CHIẾU (PROJECTOR)</div>
@@ -365,7 +366,7 @@
           </div>
         </div>`;
       }
-      else if (typeVal === 16) { // SOUNDBAR
+      else if (typeVal === 16) {
         document.getElementById("curDevLabel").innerText = "Loa Soundbar";
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">LOA SOUNDBAR</div>
@@ -375,7 +376,7 @@
           <div class="grid-3" style="margin-top:10px;"><button class="btn-cmd" onclick="sendDevAction('movie')">MOVIE</button><button class="btn-cmd" onclick="sendDevAction('music')">MUSIC</button><button class="btn-cmd" onclick="sendDevAction('surround')">SURROUND</button></div>
         </div>`;
       }
-      else if (typeVal === 17) { // ROBOT HÚT BỤI
+      else if (typeVal === 17) {
         document.getElementById("curDevLabel").innerText = "Robot hút bụi";
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">ROBOT HÚT BỤI</div>
@@ -384,7 +385,7 @@
           <div class="grid-2"><button class="btn-cmd" onclick="sendDevAction('edge')">EDGE CLEAN</button><button class="btn-cmd" onclick="sendDevAction('spot')">SPOT CLEAN</button></div>
         </div>`;
       }
-      else if (typeVal === 18) { // ĐÈN LED SMART
+      else if (typeVal === 18) {
         document.getElementById("curDevLabel").innerText = "Đèn Smart LED";
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">ĐÈN SMART LED</div>
@@ -393,7 +394,7 @@
           <button class="btn-cmd" style="width:100%;" onclick="sendDevAction('mode')">🎨 CHUYỂN CHẾ ĐỘ MÀU</button>
         </div>`;
       }
-      else if (typeVal === 19) { // STB VU+ DUO2
+      else if (typeVal === 19) {
         document.getElementById("curDevLabel").innerText = "STB VU+ Duo2";
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">STB VU+ DUO2</div>
@@ -401,7 +402,7 @@
           <div class="grid-2" style="margin-top:10px;"><button class="btn-cmd" onclick="sendDevAction('vol_up')">VOL +</button><button class="btn-cmd" onclick="sendDevAction('vol_down')">VOL -</button></div>
         </div>`;
       }
-      else if (typeVal === 20) { // APPLE TV
+      else if (typeVal === 20) {
         document.getElementById("curDevLabel").innerText = "Apple TV";
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">APPLE TV</div>
@@ -410,7 +411,7 @@
           <div class="grid-2"><button class="btn-cmd" onclick="sendDevAction('menu')">MENU</button><button class="btn-cmd" onclick="sendDevAction('play_pause')">PLAY / PAUSE</button></div>
         </div>`;
       }
-      else if (typeVal === 21) { // Ổ CẮM THÔNG MINH
+      else if (typeVal === 21) {
         document.getElementById("curDevLabel").innerText = "Ổ cắm thông minh";
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">Ổ CẮM THÔNG MINH</div>
@@ -421,10 +422,10 @@
       container.innerHTML = html;
     }
 
-    // Khởi tạo mặc định giao diện TV LG
+    // Khởi tạo mặc định TV LG
     changeDeviceTypeUI(1);
 
-    // Web Speech API cho nhận diện giọng nói
+    // Web Speech API
     let recognition = null;
     let isRecording = false;
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
