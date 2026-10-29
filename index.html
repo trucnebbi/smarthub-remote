@@ -127,16 +127,19 @@
 
   <script>
     const AIO_USERNAME = "trucnecooi";
-    const AIO_KEY      = "aio_KVpd596Jfpl07nsFC7yAt02rJfnZ";
+    const AIO_KEY      = "aio_ITja27IW4RBMTeTj39TIcMhnrIWd"; // Key từ ảnh màn hình
     const AIO_TOPIC    = AIO_USERNAME + "/feeds/ir-command";
 
     const options = {
       host: 'io.adafruit.com',
-      port: 443, // Cấu hình port 443 chuẩn cho WSS chạy HTTPS trên GitHub Pages
+      port: 443,
       protocol: 'wss',
+      path: '/mqtt', // 👈 BẮT BUỘC PHẢI CÓ DÒNG NÀY ĐỂ ADAFRUIT BÓC TÁCH AUTH
       username: AIO_USERNAME,
       password: AIO_KEY,
-      clientId: 'WebRemote_' + Math.random().toString(16).substr(2, 8)
+      clientId: 'web_' + Math.random().toString(36).substring(2, 10), // Random ID chuẩn
+      reconnectPeriod: 3000,
+      connectTimeout: 30 * 1000
     };
 
     const client = mqtt.connect(options);
@@ -145,7 +148,7 @@
       document.getElementById('dot').className = 'status-dot online';
       document.getElementById('status-text').innerText = 'Đã kết nối Cloud Adafruit IO!';
       document.getElementById('status-text').style.color = '#2ecc71';
-      console.log("✅ Đã kết nối Adafruit IO Cloud thành công!");
+      console.log("✅ Đã kết nối thành công!");
     });
 
     client.on('error', function (err) {
