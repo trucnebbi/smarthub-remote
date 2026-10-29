@@ -127,37 +127,41 @@
 
   <script>
     const AIO_USERNAME = "trucnecooi";
-    const AIO_KEY      = "aio_ITja27IW4RBMTeTj39TIcMhnrIWd";
-    const AIO_TOPIC    = AIO_USERNAME.trim() + "/feeds/ir-command";
+  const AIO_KEY      = "aio_ITja27IW4RBMTeTj39TIcMhnrIWd";
+  const AIO_TOPIC    = AIO_USERNAME.trim() + "/feeds/ir-command";
 
-    // Cấu hình chuẩn kết nối MQTT SSL/WSS cho Adafruit IO
-    const brokerUrl = 'wss://io.adafruit.com:443/mqtt';
-    
-    const options = {
-      username: AIO_USERNAME.trim(),
-      password: AIO_KEY.trim(),
-      clientId: 'gh_' + Math.random().toString(16).substring(2, 10),
-      clean: true,
-      connectTimeout: 10000,
-      reconnectPeriod: 3000
-    };
+  // Cấu hình chuẩn Object giúp mqtt.js tạo WebSocket Stream chuẩn xác 100%
+  const options = {
+    host: 'io.adafruit.com',
+    port: 443,
+    protocol: 'wss',
+    path: '/mqtt',                      // Bắt buộc phải có path này cho Adafruit
+    username: AIO_USERNAME.trim(),
+    password: AIO_KEY.trim(),
+    clientId: 'web_' + Math.random().toString(36).substring(2, 8), // Khống chế ID ngắn gọn
+    keepalive: 60,
+    reconnectPeriod: 3000,
+    connectTimeout: 30 * 1000,
+    clean: true
+  };
 
-    console.log("⚡ Đang kết nối tới Adafruit IO...");
-    const client = mqtt.connect(brokerUrl, options);
+  console.log("⚡ Đang kết nối tới Adafruit IO...");
+  // Khai báo connect bằng object options
+  const client = mqtt.connect(options);
 
-    client.on('connect', function () {
-      document.getElementById('dot').className = 'status-dot online';
-      document.getElementById('status-text').innerText = 'Đã kết nối Cloud Adafruit IO!';
-      document.getElementById('status-text').style.color = '#2ecc71';
-      console.log("✅ Đã kết nối thành công!");
-    });
+  client.on('connect', function () {
+    document.getElementById('dot').className = 'status-dot online';
+    document.getElementById('status-text').innerText = 'Đã kết nối Cloud Adafruit IO!';
+    document.getElementById('status-text').style.color = '#2ecc71';
+    console.log("✅ Kết nối MQTT thành công!");
+  });
 
-    client.on('error', function (err) {
-      document.getElementById('dot').className = 'status-dot';
-      document.getElementById('status-text').innerText = 'Lỗi kết nối Cloud!';
-      document.getElementById('status-text').style.color = '#e74c3c';
-      console.error("❌ Lỗi MQTT:", err);
-    });
+  client.on('error', function (err) {
+    document.getElementById('dot').className = 'status-dot';
+    document.getElementById('status-text').innerText = 'Lỗi kết nối Cloud!';
+    document.getElementById('status-text').style.color = '#e74c3c';
+    console.error("❌ Lỗi MQTT:", err);
+  });
 
     client.on('close', function () {
       console.warn("⚠️ Mất kết nối tới Cloud. Đang thử lại...");
