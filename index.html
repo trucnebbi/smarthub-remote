@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SMART HUB CLOUD REMOTE PRO</title>
-  <!-- Sử dụng bản CDN MQTT.js ổn định -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+  <!-- Thư viện MQTT.js bản ổn định nhất cho Browser -->
+  <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
   <style>
     body { font-family: 'Segoe UI', Arial, sans-serif; text-align: center; background: #0f111a; margin: 12px 0; color: #e0e0e0; }
     .card { background: #181b26; max-width: 480px; margin: auto; padding: 18px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
@@ -13,7 +13,7 @@
     .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #e74c3c; margin-right: 8px; }
     .status-dot.online { background: #2ecc71; }
 
-    .selector-box, .add-preset-box { background: #222634; padding: 12px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #3d445e; text-align: left; }
+    .config-box, .selector-box, .add-preset-box { background: #222634; padding: 12px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #3d445e; text-align: left; }
     select, input { padding: 10px; font-size: 14px; width: 100%; border-radius: 8px; border: 1px solid #4a5475; font-weight: bold; color: #fff; background: #2c3246; box-sizing: border-box; margin-top: 6px; }
     .btn-add { background: #3498db; color: white; border: none; padding: 10px; width: 100%; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 8px; }
 
@@ -69,7 +69,15 @@
 
     <div class="status-bar">
       <span id="dot" class="status-dot"></span>
-      <span id="status-text">Đang kết nối Cloud Adafruit IO...</span>
+      <span id="status-text">Chưa kết nối Cloud...</span>
+    </div>
+
+    <!-- Khung cấu hình tài khoản Adafruit IO -->
+    <div class="config-box">
+      <h4 style="color:#f1c40f; margin:0 0 6px 0;">🔑 Cấu hình Adafruit IO</h4>
+      <input type="text" id="aio_user" placeholder="AIO Username (VD: trucnecooi)">
+      <input type="password" id="aio_key" placeholder="AIO Key (aio_...)">
+      <button class="btn-add" onclick="connectMQTT()">LƯU & KẾT NỐI CLOUD</button>
     </div>
 
     <button class="btn-reset-wifi" onclick="resetWiFiRemote()">🔄 RESET WI-FI GIA ĐÌNH (XÓA MẠNG)</button>
@@ -121,51 +129,74 @@
       </div>
     </div>
 
-    <!-- Khung chứa remote thay đổi giao diện theo thiết bị được chọn -->
+    <!-- Khung chứa remote -->
     <div id="remoteContainer"></div>
 
   </div>
 
   <script>
-    const AIO_USERNAME = "trucnecooi";
-    const AIO_KEY      = "aio_ITja27IW4RBMTeTj39TIcMhnrIWd";
-    const AIO_TOPIC    = AIO_USERNAME.trim() + "/feeds/ir-command";
+    let client = null;
+    let AIO_TOPIC = "";
 
-    // Cấu hình kết nối MQTT qua WebSocket mã hóa SSL chuẩn Adafruit IO
-    const options = {
-      host: 'io.adafruit.com',
-      port: 443,
-      protocol: 'wss',
-      path: '/mqtt',
-      username: AIO_USERNAME.trim(),
-      password: AIO_KEY.trim(),
-      clientId: 'web_' + Math.random().toString(36).substring(2, 8),
-      keepalive: 60,
-      reconnectPeriod: 3000,
-      connectTimeout: 30 * 1000,
-      clean: true
+    // Tự động load tài khoản cũ nếu có
+    window.onload = function() {
+      if(localStorage.getItem("aio_user")) document.getElementById("aio_user").value = localStorage.getItem("aio_user");
+      if(localStorage.getItem("aio_key")) document.getElementById("aio_key").value = localStorage.getItem("aio_key");
+      if(localStorage.getItem("aio_user") && localStorage.getItem("aio_key")) {
+        connectMQTT();
+      }
     };
 
-    console.log("⚡ Đang kết nối tới Adafruit IO...");
-    const client = mqtt.connect(options);
+    function connectMQTT() {
+      const user = document.getElementById("aio_user").value.trim();
+      const key = document.getElementById("aio_key").value.trim();
 
-    client.on('connect', function () {
-      document.getElementById('dot').className = 'status-dot online';
-      document.getElementById('status-text').innerText = 'Đã kết nối Cloud Adafruit IO!';
-      document.getElementById('status-text').style.color = '#2ecc71';
-      console.log("✅ Kết nối MQTT Adafruit IO thành công!");
-    });
+      if (!user || !key) {
+        alert("Vui lòng nhập đầy đủ Username và Key Adafruit IO!");
+        return;
+      }
 
-    client.on('error', function (err) {
-      document.getElementById('dot').className = 'status-dot';
-      document.getElementById('status-text').innerText = 'Lỗi kết nối Cloud!';
-      document.getElementById('status-text').style.color = '#e74c3c';
-      console.error("❌ Lỗi MQTT:", err);
-    });
+      localStorage.setItem("aio_user", user);
+      localStorage.setItem("aio_key", key);
 
-    client.on('close', function () {
-      console.warn("⚠️ Mất kết nối tới Cloud. Đang tự động thử lại...");
-    });
+      AIO_TOPIC = user + "/feeds/ir-command";
+
+      document.getElementById('status-text').innerText = 'Đang kết nối Cloud Adafruit IO...';
+      document.getElementById('status-text').style.color = '#f1c40f';
+
+      const connectUrl = 'wss://io.adafruit.com:443/mqtt';
+      const options = {
+        clientId: 'web_' + Math.random().toString(16).substr(2, 8),
+        username: user,
+        password: key,
+        keepalive: 60,
+        clean: true,
+        reconnectPeriod: 3000
+      };
+
+      if (client) client.end();
+
+      client = mqtt.connect(connectUrl, options);
+
+      client.on('connect', function () {
+        document.getElementById('dot').className = 'status-dot online';
+        document.getElementById('status-text').innerText = 'Đã kết nối Cloud Adafruit IO!';
+        document.getElementById('status-text').style.color = '#2ecc71';
+        console.log("✅ Kết nối MQTT Adafruit IO thành công!");
+      });
+
+      client.on('error', function (err) {
+        document.getElementById('dot').className = 'status-dot';
+        document.getElementById('status-text').innerText = 'Lỗi kết nối Cloud! Kiểm tra Key/User';
+        document.getElementById('status-text').style.color = '#e74c3c';
+        console.error("❌ Lỗi MQTT:", err);
+      });
+
+      client.on('close', function () {
+        document.getElementById('dot').className = 'status-dot';
+        console.warn("⚠️ Mất kết nối tới Cloud. Đang tự động thử lại...");
+      });
+    }
 
     function sendCmd(commandStr) {
       if (client && client.connected) {
@@ -177,7 +208,7 @@
           }
         });
       } else {
-        alert("Chưa kết nối được Cloud, vui lòng kiểm tra lại kết nối mạng!");
+        alert("Chưa kết nối được Cloud, vui lòng kiểm tra lại cấu hình Adafruit IO!");
       }
     }
 
@@ -427,10 +458,10 @@
       container.innerHTML = html;
     }
 
-    // Khởi tạo mặc định giao diện TV LG
+    // Khởi tạo giao diện mặc định (TV LG)
     changeDeviceTypeUI(1);
 
-    // Web Speech API cho nhận diện giọng nói
+    // Web Speech API
     let recognition = null;
     let isRecording = false;
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
