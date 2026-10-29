@@ -132,7 +132,7 @@
 
     const options = {
       host: 'io.adafruit.com',
-      port: 8884,
+      port: 443, // Cấu hình port 443 chuẩn cho WSS chạy HTTPS trên GitHub Pages
       protocol: 'wss',
       username: AIO_USERNAME,
       password: AIO_KEY,
@@ -145,12 +145,14 @@
       document.getElementById('dot').className = 'status-dot online';
       document.getElementById('status-text').innerText = 'Đã kết nối Cloud Adafruit IO!';
       document.getElementById('status-text').style.color = '#2ecc71';
+      console.log("✅ Đã kết nối Adafruit IO Cloud thành công!");
     });
 
     client.on('error', function (err) {
       document.getElementById('dot').className = 'status-dot';
       document.getElementById('status-text').innerText = 'Lỗi kết nối Cloud!';
       document.getElementById('status-text').style.color = '#e74c3c';
+      console.error("❌ Lỗi MQTT:", err);
     });
 
     function sendCmd(commandStr) {
@@ -317,7 +319,7 @@
           </div>
         </div>`;
       }
-      else if (typeVal >= 8 && typeVal <= 14) { // MÁY LẠNH DÀNH CHO TẤT CẢ CÁC HÃNG
+      else if (typeVal >= 8 && typeVal <= 14) { // MÁY LẠNH (ĐIỀU HOÀ)
         document.getElementById("curDevLabel").innerText = "Máy lạnh";
         html = `<div class="remote-shell brand-ac">
           <div class="remote-header">MÁY LẠNH (ĐIỀU HOÀ)</div>
