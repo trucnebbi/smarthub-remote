@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SMART HUB CLOUD REMOTE PRO</title>
-  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <!-- Sử dụng bản CDN MQTT.js ổn định -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
   <style>
     body { font-family: 'Segoe UI', Arial, sans-serif; text-align: center; background: #0f111a; margin: 12px 0; color: #e0e0e0; }
     .card { background: #181b26; max-width: 480px; margin: auto; padding: 18px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
@@ -120,51 +121,50 @@
       </div>
     </div>
 
-    <!-- KHUNG CHỨA REMOTE THAY ĐỔI DỰA TRÊN DEVICE SELECTOR -->
+    <!-- Khung chứa remote thay đổi giao diện theo thiết bị được chọn -->
     <div id="remoteContainer"></div>
 
   </div>
 
   <script>
     const AIO_USERNAME = "trucnecooi";
-  const AIO_KEY      = "aio_ITja27IW4RBMTeTj39TIcMhnrIWd";
-  const AIO_TOPIC    = AIO_USERNAME.trim() + "/feeds/ir-command";
+    const AIO_KEY      = "aio_ITja27IW4RBMTeTj39TIcMhnrIWd";
+    const AIO_TOPIC    = AIO_USERNAME.trim() + "/feeds/ir-command";
 
-  // Cấu hình chuẩn Object giúp mqtt.js tạo WebSocket Stream chuẩn xác 100%
-  const options = {
-    host: 'io.adafruit.com',
-    port: 443,
-    protocol: 'wss',
-    path: '/mqtt',                      // Bắt buộc phải có path này cho Adafruit
-    username: AIO_USERNAME.trim(),
-    password: AIO_KEY.trim(),
-    clientId: 'web_' + Math.random().toString(36).substring(2, 8), // Khống chế ID ngắn gọn
-    keepalive: 60,
-    reconnectPeriod: 3000,
-    connectTimeout: 30 * 1000,
-    clean: true
-  };
+    // Cấu hình kết nối MQTT qua WebSocket mã hóa SSL chuẩn Adafruit IO
+    const options = {
+      host: 'io.adafruit.com',
+      port: 443,
+      protocol: 'wss',
+      path: '/mqtt',
+      username: AIO_USERNAME.trim(),
+      password: AIO_KEY.trim(),
+      clientId: 'web_' + Math.random().toString(36).substring(2, 8),
+      keepalive: 60,
+      reconnectPeriod: 3000,
+      connectTimeout: 30 * 1000,
+      clean: true
+    };
 
-  console.log("⚡ Đang kết nối tới Adafruit IO...");
-  // Khai báo connect bằng object options
-  const client = mqtt.connect(options);
+    console.log("⚡ Đang kết nối tới Adafruit IO...");
+    const client = mqtt.connect(options);
 
-  client.on('connect', function () {
-    document.getElementById('dot').className = 'status-dot online';
-    document.getElementById('status-text').innerText = 'Đã kết nối Cloud Adafruit IO!';
-    document.getElementById('status-text').style.color = '#2ecc71';
-    console.log("✅ Kết nối MQTT thành công!");
-  });
+    client.on('connect', function () {
+      document.getElementById('dot').className = 'status-dot online';
+      document.getElementById('status-text').innerText = 'Đã kết nối Cloud Adafruit IO!';
+      document.getElementById('status-text').style.color = '#2ecc71';
+      console.log("✅ Kết nối MQTT Adafruit IO thành công!");
+    });
 
-  client.on('error', function (err) {
-    document.getElementById('dot').className = 'status-dot';
-    document.getElementById('status-text').innerText = 'Lỗi kết nối Cloud!';
-    document.getElementById('status-text').style.color = '#e74c3c';
-    console.error("❌ Lỗi MQTT:", err);
-  });
+    client.on('error', function (err) {
+      document.getElementById('dot').className = 'status-dot';
+      document.getElementById('status-text').innerText = 'Lỗi kết nối Cloud!';
+      document.getElementById('status-text').style.color = '#e74c3c';
+      console.error("❌ Lỗi MQTT:", err);
+    });
 
     client.on('close', function () {
-      console.warn("⚠️ Mất kết nối tới Cloud. Đang thử lại...");
+      console.warn("⚠️ Mất kết nối tới Cloud. Đang tự động thử lại...");
     });
 
     function sendCmd(commandStr) {
@@ -177,7 +177,7 @@
           }
         });
       } else {
-        alert("Chưa kết nối được Cloud, vui lòng kiểm tra lại mạng!");
+        alert("Chưa kết nối được Cloud, vui lòng kiểm tra lại kết nối mạng!");
       }
     }
 
