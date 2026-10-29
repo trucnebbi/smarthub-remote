@@ -103,28 +103,13 @@
     </div>
 
     <div class="selector-box">
-      <label style="font-size:13px; font-weight:bold; color:#a0aec0;">CHỌN MẪU GIAO DIỆN REMOTE:</label>
-      <select id="deviceSelector" onchange="changeDeviceTypeUI(this.value)">
-        <option value="0">Thiết bị học IR</option>
-        <option value="1" selected>TV LG (LG WebOS)</option>
-        <option value="2">TV Samsung (Smart TV)</option>
-        <option value="3">TV TCL (P715)</option>
-        <option value="4">TV TCL (RC833)</option>
-        <option value="5">TV Panasonic (Viera)</option>
-        <option value="6">TV Sony (Bravia)</option>
-        <option value="7">TV VEON</option>
-        <option value="8">Máy lạnh (Điều hòa các hãng)</option>
-        <option value="15">Máy chiếu (Projector)</option>
-        <option value="16">Loa Soundbar</option>
-        <option value="17">Robot hút bụi</option>
-        <option value="18">Đèn Smart LED</option>
-        <option value="19">STB VU+ Duo2</option>
-        <option value="20">Apple TV</option>
-        <option value="21">Ổ cắm thông minh</option>
+      <label style="font-size:13px; font-weight:bold; color:#a0aec0;">CHỌN THIẾT BỊ ĐIỀU KHIỂN:</label>
+      <select id="deviceSelector" onchange="changeActiveDevice(this.value)">
+        <option value="0">Smart TV LivingRoom (TV LG)</option>
       </select>
 
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-        <span style="color:#718096; font-size:12px;">Đang chọn: <b id="curDevLabel" style="color:#3498db;">TV LG</b></span>
+        <span style="color:#718096; font-size:12px;"><a href="javascript:void(0)" onclick="deleteCurrentDevice()" style="color:#e74c3c; text-decoration:none;">🗑️ Xóa thiết bị này</a></span>
         <a href="javascript:void(0)" onclick="resetAllDevicesCloud()" style="color:#f39c12; font-size:12px; text-decoration:none; font-weight:bold;">⚠️ Xóa tất cả (Reset về 0)</a>
       </div>
     </div>
@@ -137,6 +122,17 @@
   <script>
     let client = null;
     let AIO_TOPIC = "";
+    
+    // Danh sách thiết bị đồng bộ trên Web tương ứng với ESP32
+    let devicesList = [
+      { name: "Smart TV LivingRoom", type: 1 }
+    ];
+
+    const DEV_NAMES_WITH_ICON = [
+      "Thiet bi hoc IR", "TV LG", "TV Samsung", "TV TCL (P715)", "TV TCL (RC833)", "TV Panasonic", "TV Sony", "TV VEON",
+      "May lanh (Chung)", "May lanh Daikin", "May lanh Panasonic", "May lanh LG", "May lanh Gree/TCL", "May lanh Midea/Carrier", "May lanh Toshiba",
+      "May chieu", "Loa Soundbar", "Robot hut bui", "Den Smart LED", "STB VU+ Duo2", "Apple TV", "O cam"
+    ];
 
     // Tự động load tài khoản cũ nếu có
     window.onload = function() {
@@ -145,6 +141,7 @@
       if(localStorage.getItem("aio_user") && localStorage.getItem("aio_key")) {
         connectMQTT();
       }
+      updateDeviceSelectorUI();
     };
 
     function connectMQTT() {
@@ -212,7 +209,8 @@
       }
     }
 
-    function sendDevAction(act) {
+    // Gửi lệnh theo chuẩn định dạng [devIndex],[action] mà code ESP32 đang đọc
+    function sendAction(act) {
       let devIdx = document.getElementById("deviceSelector").value;
       sendCmd(devIdx + "," + act);
     }
@@ -225,243 +223,271 @@
 
     function resetAllDevicesCloud() {
       if (confirm("Bạn có chắc chắn muốn xóa hết tất cả thiết bị trên ESP32 không?")) {
+        devicesList = [];
+        updateDeviceSelectorUI();
         sendCmd("reset_all");
       }
     }
 
     function addPresetCloud() {
       let name = document.getElementById("presetName").value.trim();
-      let type = document.getElementById("presetType").value;
+      let type = parseInt(document.getElementById("presetType").value);
       if (!name) { alert("Vui lòng nhập tên thiết bị!"); return; }
+      
+      devicesList.push({ name: name, type: type });
+      updateDeviceSelectorUI();
+      document.getElementById("deviceSelector").value = devicesList.length - 1;
+      changeActiveDevice(devicesList.length - 1);
+
       sendCmd("add_preset," + name + "," + type);
       alert("Đã gửi lệnh thêm remote mới tới ESP32!");
       document.getElementById("presetName").value = "";
     }
 
-    function changeDeviceTypeUI(typeVal) {
+    function deleteCurrentDevice() {
+      let devIdx = parseInt(document.getElementById("deviceSelector").value);
+      if (devicesList.length > 0 && !isNaN(devIdx) && devIdx >= 0 && devIdx < devicesList.length) {
+        devicesList.splice(devIdx, 1);
+        updateDeviceSelectorUI();
+        if(devicesList.length > 0) {
+          document.getElementById("deviceSelector").value = 0;
+          changeActiveDevice(0);
+        } else {
+          document.getElementById("remoteContainer").innerHTML = "<p style='color:#718096;'>Chưa có thiết bị</p>";
+        }
+        sendCmd("delete," + devIdx);
+      }
+    }
+
+    function updateDeviceSelectorUI() {
+      let selector = document.getElementById("deviceSelector");
+      selector.innerHTML = "";
+      if(devicesList.length === 0) {
+        selector.innerHTML = "<option value=''>-- Không có thiết bị --</option>";
+        document.getElementById("remoteContainer").innerHTML = "<p style='color:#718096;'>Chưa có thiết bị</p>";
+        return;
+      }
+      devicesList.forEach((dev, idx) => {
+        let opt = document.createElement("option");
+        opt.value = idx;
+        opt.innerText = dev.name + " (" + DEV_NAMES_WITH_ICON[dev.type] + ")";
+        selector.appendChild(opt);
+      });
+      changeActiveDevice(selector.value);
+    }
+
+    function changeActiveDevice(idx) {
+      if(devicesList.length === 0 || idx === "") return;
+      let dev = devicesList[idx];
+      renderRemoteUI(dev.type, dev.name);
+    }
+
+    function renderRemoteUI(typeVal, devName) {
       typeVal = parseInt(typeVal);
       let container = document.getElementById("remoteContainer");
       let html = "";
 
       if (typeVal === 0) { // THIẾT BỊ HỌC IR
-        document.getElementById("curDevLabel").innerText = "Thiết bị học IR";
         html = `<div class="remote-shell brand-generic">
-          <div class="remote-header">THIẾT BỊ HỌC IR TÙY CHỈNH</div>
-          <button class="btn-power" style="width:100%; padding:15px;" onclick="sendDevAction('power_toggle')">📡 PHÁT MÃ IR ĐÃ HỌC</button>
+          <div class="remote-header">${devName} (THIẾT BỊ HỌC IR)</div>
+          <button class="btn-power" style="width:100%; padding:15px;" onclick="sendAction('power_toggle')">📡 PHÁT MÃ IR ĐÃ HỌC</button>
           <div class="grid-2" style="margin-top:12px;">
-            <button class="btn-cmd" onclick="sendDevAction('vol_up')">VOL +</button>
-            <button class="btn-cmd" onclick="sendDevAction('vol_down')">VOL -</button>
+            <button class="btn-cmd" onclick="sendAction('vol_up')">VOL +</button>
+            <button class="btn-cmd" onclick="sendAction('vol_down')">VOL -</button>
           </div>
         </div>`;
       }
       else if (typeVal === 1) { // TV LG
-        document.getElementById("curDevLabel").innerText = "TV LG";
         html = `<div class="remote-shell brand-lg">
-          <div class="remote-header">TV LG (WEBOS)</div>
-          <div class="grid-2"><button class="btn-power" onclick="sendDevAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendDevAction('input')">INPUT</button></div>
-          <div class="grid-3"><button class="btn-cmd" onclick="sendDevAction('qmenu')">Q.MENU</button><button class="btn-cmd" onclick="sendDevAction('ratio')">RATIO</button><button class="btn-cmd" onclick="sendDevAction('energy')">ENERGY</button></div>
-          <div class="d-pad"><button class="d-btn d-up" onclick="sendDevAction('up')">▲</button><button class="d-btn d-down" onclick="sendDevAction('down')">▼</button><button class="d-btn d-left" onclick="sendDevAction('left')">◄</button><button class="d-btn d-right" onclick="sendDevAction('right')">►</button><button class="d-btn d-ok" onclick="sendDevAction('select')">OK</button></div>
-          <div class="grid-3"><button class="btn-cmd" onclick="sendDevAction('back')">BACK</button><button class="btn-cmd" onclick="sendDevAction('guide')">GUIDE</button><button class="btn-cmd" onclick="sendDevAction('exit')">EXIT</button></div>
-          <div class="grid-4"><button class="color-btn c-red" onclick="sendDevAction('red')"></button><button class="color-btn c-green" onclick="sendDevAction('green')"></button><button class="color-btn c-yellow" onclick="sendDevAction('yellow')"></button><button class="color-btn c-blue" onclick="sendDevAction('blue')"></button></div>
+          <div class="remote-header">${devName} (LG WEBOS)</div>
+          <div class="grid-2"><button class="btn-power" onclick="sendAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendAction('input')">INPUT</button></div>
+          <div class="grid-3"><button class="btn-cmd" onclick="sendAction('qmenu')">Q.MENU</button><button class="btn-cmd" onclick="sendAction('ratio')">RATIO</button><button class="btn-cmd" onclick="sendAction('energy')">ENERGY</button></div>
+          <div class="d-pad"><button class="d-btn d-up" onclick="sendAction('up')">▲</button><button class="d-btn d-down" onclick="sendAction('down')">▼</button><button class="d-btn d-left" onclick="sendAction('left')">◄</button><button class="d-btn d-right" onclick="sendAction('right')">►</button><button class="d-btn d-ok" onclick="sendAction('select')">OK</button></div>
+          <div class="grid-3"><button class="btn-cmd" onclick="sendAction('back')">BACK</button><button class="btn-cmd" onclick="sendAction('guide')">GUIDE</button><button class="btn-cmd" onclick="sendAction('exit')">EXIT</button></div>
+          <div class="grid-4"><button class="color-btn c-red" onclick="sendAction('red')"></button><button class="color-btn c-green" onclick="sendAction('green')"></button><button class="color-btn c-yellow" onclick="sendAction('yellow')"></button><button class="color-btn c-blue" onclick="sendAction('blue')"></button></div>
           <div class="grid-3" style="align-items:center; margin-top:12px;">
-            <div class="pill-box"><button onclick="sendDevAction('vol_up')">VOL+</button><button onclick="sendDevAction('vol_down')">VOL-</button></div>
-            <button class="btn-cmd" onclick="sendDevAction('mute')">🔇 MUTE</button>
-            <div class="pill-box"><button onclick="sendDevAction('ch_up')">CH+</button><button onclick="sendDevAction('ch_down')">CH-</button></div>
+            <div class="pill-box"><button onclick="sendAction('vol_up')">VOL+</button><button onclick="sendAction('vol_down')">VOL-</button></div>
+            <button class="btn-cmd" onclick="sendAction('mute')">🔇 MUTE</button>
+            <div class="pill-box"><button onclick="sendAction('ch_up')">CH+</button><button onclick="sendAction('ch_down')">CH-</button></div>
           </div>
-          <div class="grid-2" style="margin-top:10px;"><button class="btn-cmd" onclick="sendDevAction('list')">CH LIST</button><button class="btn-cmd" onclick="sendDevAction('livetv')">LIVE TV</button></div>
+          <div class="grid-2" style="margin-top:10px;"><button class="btn-cmd" onclick="sendAction('list')">CH LIST</button><button class="btn-cmd" onclick="sendAction('livetv')">LIVE TV</button></div>
         </div>`;
       } 
       else if (typeVal === 2) { // TV SAMSUNG
-        document.getElementById("curDevLabel").innerText = "TV Samsung";
         html = `<div class="remote-shell brand-samsung">
-          <div class="remote-header">TV SAMSUNG (SMART)</div>
-          <div class="grid-3"><button class="btn-power-on" onclick="sendDevAction('power_on')">ON</button><button class="btn-power" onclick="sendDevAction('power_off')">OFF</button><button class="btn-cmd" onclick="sendDevAction('source')">SOURCE</button></div>
-          <div class="grid-3"><button class="btn-cmd" style="color:#f1c40f;" onclick="sendDevAction('smarthub')">SMARTHUB</button><button class="btn-cmd" onclick="sendDevAction('menu')">MENU</button><button class="btn-cmd" onclick="sendDevAction('tools')">TOOLS</button></div>
-          <div class="d-pad"><button class="d-btn d-up" onclick="sendDevAction('up')">▲</button><button class="d-btn d-down" onclick="sendDevAction('down')">▼</button><button class="d-btn d-left" onclick="sendDevAction('left')">◄</button><button class="d-btn d-right" onclick="sendDevAction('right')">►</button><button class="d-btn d-ok" onclick="sendDevAction('select')">ENTER</button></div>
-          <div class="grid-3"><button class="btn-cmd" onclick="sendDevAction('back')">RETURN</button><button class="btn-cmd" onclick="sendDevAction('info')">INFO</button><button class="btn-cmd" onclick="sendDevAction('exit')">EXIT</button></div>
-          <div class="grid-4"><button class="color-btn c-red" onclick="sendDevAction('ared')">A</button><button class="color-btn c-green" onclick="sendDevAction('bgreen')">B</button><button class="color-btn c-yellow" onclick="sendDevAction('cyellow')">C</button><button class="color-btn c-blue" onclick="sendDevAction('dblue')">D</button></div>
+          <div class="remote-header">${devName} (SAMSUNG SMART)</div>
+          <div class="grid-3"><button class="btn-power-on" onclick="sendAction('power_on')">ON</button><button class="btn-power" onclick="sendAction('power_off')">OFF</button><button class="btn-cmd" onclick="sendAction('source')">SOURCE</button></div>
+          <div class="grid-3"><button class="btn-cmd" style="color:#f1c40f;" onclick="sendAction('smarthub')">SMARTHUB</button><button class="btn-cmd" onclick="sendAction('menu')">MENU</button><button class="btn-cmd" onclick="sendAction('tools')">TOOLS</button></div>
+          <div class="d-pad"><button class="d-btn d-up" onclick="sendAction('up')">▲</button><button class="d-btn d-down" onclick="sendAction('down')">▼</button><button class="d-btn d-left" onclick="sendAction('left')">◄</button><button class="d-btn d-right" onclick="sendAction('right')">►</button><button class="d-btn d-ok" onclick="sendAction('select')">ENTER</button></div>
+          <div class="grid-3"><button class="btn-cmd" onclick="sendAction('back')">RETURN</button><button class="btn-cmd" onclick="sendAction('info')">INFO</button><button class="btn-cmd" onclick="sendAction('exit')">EXIT</button></div>
+          <div class="grid-4"><button class="color-btn c-red" onclick="sendAction('ared')">A</button><button class="color-btn c-green" onclick="sendAction('bgreen')">B</button><button class="color-btn c-yellow" onclick="sendAction('cyellow')">C</button><button class="color-btn c-blue" onclick="sendAction('dblue')">D</button></div>
           <div class="grid-3" style="align-items:center; margin-top:12px;">
-            <div class="pill-box"><button onclick="sendDevAction('vol_up')">VOL+</button><button onclick="sendDevAction('vol_down')">VOL-</button></div>
-            <button class="btn-cmd" onclick="sendDevAction('mute')">MUTE</button>
-            <div class="pill-box"><button onclick="sendDevAction('ch_up')">PROG+</button><button onclick="sendDevAction('ch_down')">PROG-</button></div>
+            <div class="pill-box"><button onclick="sendAction('vol_up')">VOL+</button><button onclick="sendAction('vol_down')">VOL-</button></div>
+            <button class="btn-cmd" onclick="sendAction('mute')">MUTE</button>
+            <div class="pill-box"><button onclick="sendAction('ch_up')">PROG+</button><button onclick="sendAction('ch_down')">PROG-</button></div>
           </div>
-          <div class="grid-3" style="margin-top:10px;"><button class="btn-cmd" onclick="sendDevAction('emanual')">E-MANUAL</button><button class="btn-cmd" onclick="sendDevAction('mode3d')">3D</button><button class="btn-cmd" onclick="sendDevAction('prechn')">PRE-CHN</button></div>
+          <div class="grid-3" style="margin-top:10px;"><button class="btn-cmd" onclick="sendAction('emanual')">E-MANUAL</button><button class="btn-cmd" onclick="sendAction('mode3d')">3D</button><button class="btn-cmd" onclick="sendAction('prechn')">PRE-CHN</button></div>
         </div>`;
       }
       else if (typeVal === 3) { // TV TCL P715
-        document.getElementById("curDevLabel").innerText = "TV TCL (P715)";
         html = `<div class="remote-shell brand-tcl">
-          <div class="remote-header">TV TCL (55P715)</div>
-          <div class="grid-2"><button class="btn-power" onclick="sendDevAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendDevAction('source')">SOURCE</button></div>
-          <div class="grid-3"><button class="btn-cmd" onclick="sendDevAction('settings')">SETTINGS</button><button class="btn-cmd" onclick="sendDevAction('epg')">EPG</button><button class="btn-cmd" onclick="sendDevAction('home')">HOME</button></div>
-          <div class="d-pad"><button class="d-btn d-up" onclick="sendDevAction('up')">▲</button><button class="d-btn d-down" onclick="sendDevAction('down')">▼</button><button class="d-btn d-left" onclick="sendDevAction('left')">◄</button><button class="d-btn d-right" onclick="sendDevAction('right')">►</button><button class="d-btn d-ok" onclick="sendDevAction('select')">ENTER</button></div>
-          <div class="grid-3"><button class="btn-cmd" onclick="sendDevAction('menu')">MENU</button><button class="btn-cmd" onclick="sendDevAction('info')">INFO</button><button class="btn-cmd" onclick="sendDevAction('back')">BACK</button></div>
+          <div class="remote-header">${devName} (TCL 55P715)</div>
+          <div class="grid-2"><button class="btn-power" onclick="sendAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendAction('source')">SOURCE</button></div>
+          <div class="grid-3"><button class="btn-cmd" onclick="sendAction('settings')">SETTINGS</button><button class="btn-cmd" onclick="sendAction('epg')">EPG</button><button class="btn-cmd" onclick="sendAction('home')">HOME</button></div>
+          <div class="d-pad"><button class="d-btn d-up" onclick="sendAction('up')">▲</button><button class="d-btn d-down" onclick="sendAction('down')">▼</button><button class="d-btn d-left" onclick="sendAction('left')">◄</button><button class="d-btn d-right" onclick="sendAction('right')">►</button><button class="d-btn d-ok" onclick="sendAction('select')">ENTER</button></div>
+          <div class="grid-3"><button class="btn-cmd" onclick="sendAction('menu')">MENU</button><button class="btn-cmd" onclick="sendAction('info')">INFO</button><button class="btn-cmd" onclick="sendAction('back')">BACK</button></div>
           <div class="grid-3" style="align-items:center; margin-top:12px;">
-            <div class="pill-box"><button onclick="sendDevAction('vol_up')">VOL+</button><button onclick="sendDevAction('vol_down')">VOL-</button></div>
-            <button class="btn-cmd" onclick="sendDevAction('mute')">MUTE</button>
-            <div class="pill-box"><button onclick="sendDevAction('ch_up')">P+</button><button onclick="sendDevAction('ch_down')">P-</button></div>
+            <div class="pill-box"><button onclick="sendAction('vol_up')">VOL+</button><button onclick="sendAction('vol_down')">VOL-</button></div>
+            <button class="btn-cmd" onclick="sendAction('mute')">MUTE</button>
+            <div class="pill-box"><button onclick="sendAction('ch_up')">P+</button><button onclick="sendAction('ch_down')">P-</button></div>
           </div>
-          <button class="btn-cmd" style="width:100%; margin-top:10px; background:#e50914; color:white;" onclick="sendDevAction('netflix')">NETFLIX</button>
+          <button class="btn-cmd" style="width:100%; margin-top:10px; background:#e50914; color:white;" onclick="sendAction('netflix')">NETFLIX</button>
         </div>`;
       }
       else if (typeVal === 4) { // TV TCL RC833
-        document.getElementById("curDevLabel").innerText = "TV TCL (RC833)";
         html = `<div class="remote-shell brand-tcl">
-          <div class="remote-header">TV TCL (RC833)</div>
-          <div class="grid-3"><button class="btn-power" onclick="sendDevAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendDevAction('googlemic')">🎤 MIC</button><button class="btn-cmd" onclick="sendDevAction('account')">ACCOUNT</button></div>
-          <div class="grid-3"><button class="btn-cmd" onclick="sendDevAction('settings')">SETTINGS</button><button class="btn-cmd" onclick="sendDevAction('source')">SOURCE</button><button class="btn-cmd" onclick="sendDevAction('home')">HOME</button></div>
-          <div class="d-pad"><button class="d-btn d-up" onclick="sendDevAction('up')">▲</button><button class="d-btn d-down" onclick="sendDevAction('down')">▼</button><button class="d-btn d-left" onclick="sendDevAction('left')">◄</button><button class="d-btn d-right" onclick="sendDevAction('right')">►</button><button class="d-btn d-ok" onclick="sendDevAction('select')">OK</button></div>
-          <div class="grid-3"><button class="btn-cmd" onclick="sendDevAction('back')">BACK</button><button class="btn-cmd" onclick="sendDevAction('tv')">TV</button><button class="btn-cmd" onclick="sendDevAction('menu')">MENU</button></div>
+          <div class="remote-header">${devName} (TCL RC833)</div>
+          <div class="grid-3"><button class="btn-power" onclick="sendAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendAction('googlemic')">🎤 MIC</button><button class="btn-cmd" onclick="sendAction('account')">ACCOUNT</button></div>
+          <div class="grid-3"><button class="btn-cmd" onclick="sendAction('settings')">SETTINGS</button><button class="btn-cmd" onclick="sendAction('source')">SOURCE</button><button class="btn-cmd" onclick="sendAction('home')">HOME</button></div>
+          <div class="d-pad"><button class="d-btn d-up" onclick="sendAction('up')">▲</button><button class="d-btn d-down" onclick="sendAction('down')">▼</button><button class="d-btn d-left" onclick="sendAction('left')">◄</button><button class="d-btn d-right" onclick="sendAction('right')">►</button><button class="d-btn d-ok" onclick="sendAction('select')">OK</button></div>
+          <div class="grid-3"><button class="btn-cmd" onclick="sendAction('back')">BACK</button><button class="btn-cmd" onclick="sendAction('tv')">TV</button><button class="btn-cmd" onclick="sendAction('menu')">MENU</button></div>
           <div class="grid-3" style="align-items:center; margin-top:12px;">
-            <div class="pill-box"><button onclick="sendDevAction('vol_up')">VOL+</button><button onclick="sendDevAction('vol_down')">VOL-</button></div>
-            <button class="btn-cmd" onclick="sendDevAction('mute')">MUTE</button>
-            <div class="pill-box"><button onclick="sendDevAction('ch_up')">CH+</button><button onclick="sendDevAction('ch_down')">CH-</button></div>
+            <div class="pill-box"><button onclick="sendAction('vol_up')">VOL+</button><button onclick="sendAction('vol_down')">VOL-</button></div>
+            <button class="btn-cmd" onclick="sendAction('mute')">MUTE</button>
+            <div class="pill-box"><button onclick="sendAction('ch_up')">CH+</button><button onclick="sendAction('ch_down')">CH-</button></div>
           </div>
-          <div class="grid-2" style="margin-top:10px;"><button class="btn-cmd" style="background:#e50914; color:white;" onclick="sendDevAction('netflix')">NETFLIX</button><button class="btn-cmd" style="background:#ff0000; color:white;" onclick="sendDevAction('youtube')">YOUTUBE</button></div>
-          <div class="grid-2"><button class="btn-cmd" style="background:#00a8e1; color:white;" onclick="sendDevAction('prime')">PRIME VIDEO</button><button class="btn-cmd" onclick="sendDevAction('tclchannel')">TCL CHANNEL</button></div>
+          <div class="grid-2" style="margin-top:10px;"><button class="btn-cmd" style="background:#e50914; color:white;" onclick="sendAction('netflix')">NETFLIX</button><button class="btn-cmd" style="background:#ff0000; color:white;" onclick="sendAction('youtube')">YOUTUBE</button></div>
+          <div class="grid-2"><button class="btn-cmd" style="background:#00a8e1; color:white;" onclick="sendAction('prime')">PRIME VIDEO</button><button class="btn-cmd" style="background:#tclchannel" onclick="sendAction('tclchannel')">TCL CHANNEL</button></div>
         </div>`;
       }
       else if (typeVal === 5) { // TV PANASONIC
-        document.getElementById("curDevLabel").innerText = "TV Panasonic";
         html = `<div class="remote-shell brand-panasonic">
-          <div class="remote-header">PANASONIC VIERA</div>
-          <div class="grid-3"><button class="btn-power" onclick="sendDevAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendDevAction('tv')">TV</button><button class="btn-cmd" onclick="sendDevAction('av')">AV</button></div>
-          <div class="grid-3"><button class="btn-cmd" onclick="sendDevAction('lastview')">LAST VIEW</button><button class="btn-cmd" onclick="sendDevAction('myapp')">MY APP</button><button class="btn-cmd" onclick="sendDevAction('apps')">APPS</button></div>
-          <div class="d-pad"><button class="d-btn d-up" onclick="sendDevAction('up')">▲</button><button class="d-btn d-down" onclick="sendDevAction('down')">▼</button><button class="d-btn d-left" onclick="sendDevAction('left')">◄</button><button class="d-btn d-right" onclick="sendDevAction('right')">►</button><button class="d-btn d-ok" onclick="sendDevAction('select')">OK</button></div>
-          <div class="grid-3"><button class="btn-cmd" onclick="sendDevAction('back')">BACK</button><button class="btn-cmd" onclick="sendDevAction('option')">OPTION</button><button class="btn-cmd" onclick="sendDevAction('exit')">EXIT</button></div>
+          <div class="remote-header">${devName} (PANASONIC VIERA)</div>
+          <div class="grid-3"><button class="btn-power" onclick="sendAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendAction('tv')">TV</button><button class="btn-cmd" onclick="sendAction('av')">AV</button></div>
+          <div class="grid-3"><button class="btn-cmd" onclick="sendAction('lastview')">LAST VIEW</button><button class="btn-cmd" onclick="sendAction('myapp')">MY APP</button><button class="btn-cmd" onclick="sendAction('apps')">APPS</button></div>
+          <div class="d-pad"><button class="d-btn d-up" onclick="sendAction('up')">▲</button><button class="d-btn d-down" onclick="sendAction('down')">▼</button><button class="d-btn d-left" onclick="sendAction('left')">◄</button><button class="d-btn d-right" onclick="sendAction('right')">►</button><button class="d-btn d-ok" onclick="sendAction('select')">OK</button></div>
+          <div class="grid-3"><button class="btn-cmd" onclick="sendAction('back')">BACK</button><button class="btn-cmd" onclick="sendAction('option')">OPTION</button><button class="btn-cmd" onclick="sendAction('exit')">EXIT</button></div>
           <div class="grid-3" style="align-items:center; margin-top:12px;">
-            <div class="pill-box"><button onclick="sendDevAction('vol_up')">VOL+</button><button onclick="sendDevAction('vol_down')">VOL-</button></div>
-            <button class="btn-cmd" onclick="sendDevAction('mute')">MUTE</button>
-            <div class="pill-box"><button onclick="sendDevAction('ch_up')">P+</button><button onclick="sendDevAction('ch_down')">P-</button></div>
+            <div class="pill-box"><button onclick="sendAction('vol_up')">VOL+</button><button onclick="sendAction('vol_down')">VOL-</button></div>
+            <button class="btn-cmd" onclick="sendAction('mute')">MUTE</button>
+            <div class="pill-box"><button onclick="sendAction('ch_up')">P+</button><button onclick="sendAction('ch_down')">P-</button></div>
           </div>
-          <div class="grid-3" style="margin-top:10px;"><button class="btn-cmd" onclick="sendDevAction('picture')">PICTURE</button><button class="btn-cmd" onclick="sendDevAction('help')">HELP</button><button class="btn-cmd" style="background:#e50914; color:white;" onclick="sendDevAction('netflix')">NETFLIX</button></div>
+          <div class="grid-3" style="margin-top:10px;"><button class="btn-cmd" onclick="sendAction('picture')">PICTURE</button><button class="btn-cmd" onclick="sendAction('help')">HELP</button><button class="btn-cmd" style="background:#e50914; color:white;" onclick="sendAction('netflix')">NETFLIX</button></div>
         </div>`;
       }
       else if (typeVal === 6) { // TV SONY
-        document.getElementById("curDevLabel").innerText = "TV Sony";
         html = `<div class="remote-shell brand-sony">
-          <div class="remote-header">SONY BRAVIA</div>
-          <div class="grid-3"><button class="btn-power-on" onclick="sendDevAction('power_on')">ON</button><button class="btn-power" onclick="sendDevAction('power_off')">OFF</button><button class="btn-cmd" onclick="sendDevAction('source')">INPUT</button></div>
-          <div class="grid-3"><button class="btn-cmd" onclick="sendDevAction('theatre')">THEATRE</button><button class="btn-cmd" onclick="sendDevAction('syncmenu')">SYNC</button><button class="btn-cmd" onclick="sendDevAction('home')">HOME</button></div>
-          <div class="d-pad"><button class="d-btn d-up" onclick="sendDevAction('up')">▲</button><button class="d-btn d-down" onclick="sendDevAction('down')">▼</button><button class="d-btn d-left" onclick="sendDevAction('left')">◄</button><button class="d-btn d-right" onclick="sendDevAction('right')">►</button><button class="d-btn d-ok" onclick="sendDevAction('select')">OK</button></div>
-          <div class="grid-3"><button class="btn-cmd" onclick="sendDevAction('back')">RETURN</button><button class="btn-cmd" onclick="sendDevAction('options')">OPTIONS</button><button class="btn-cmd" onclick="sendDevAction('info')">INFO</button></div>
+          <div class="remote-header">${devName} (SONY BRAVIA)</div>
+          <div class="grid-3"><button class="btn-power-on" onclick="sendAction('power_on')">ON</button><button class="btn-power" onclick="sendAction('power_off')">OFF</button><button class="btn-cmd" onclick="sendAction('source')">INPUT</button></div>
+          <div class="grid-3"><button class="btn-cmd" onclick="sendAction('theatre')">THEATRE</button><button class="btn-cmd" onclick="sendAction('syncmenu')">SYNC</button><button class="btn-cmd" onclick="sendAction('home')">HOME</button></div>
+          <div class="d-pad"><button class="d-btn d-up" onclick="sendAction('up')">▲</button><button class="d-btn d-down" onclick="sendAction('down')">▼</button><button class="d-btn d-left" onclick="sendAction('left')">◄</button><button class="d-btn d-right" onclick="sendAction('right')">►</button><button class="d-btn d-ok" onclick="sendAction('select')">OK</button></div>
+          <div class="grid-3"><button class="btn-cmd" onclick="sendAction('back')">RETURN</button><button class="btn-cmd" onclick="sendAction('options')">OPTIONS</button><button class="btn-cmd" onclick="sendAction('info')">INFO</button></div>
           <div class="grid-3" style="align-items:center; margin-top:12px;">
-            <div class="pill-box"><button onclick="sendDevAction('vol_up')">VOL+</button><button onclick="sendDevAction('vol_down')">VOL-</button></div>
-            <button class="btn-cmd" onclick="sendDevAction('mute')">MUTE</button>
-            <div class="pill-box"><button onclick="sendDevAction('ch_up')">CH+</button><button onclick="sendDevAction('ch_down')">CH-</button></div>
+            <div class="pill-box"><button onclick="sendAction('vol_up')">VOL+</button><button onclick="sendAction('vol_down')">VOL-</button></div>
+            <button class="btn-cmd" onclick="sendAction('mute')">MUTE</button>
+            <div class="pill-box"><button onclick="sendAction('ch_up')">CH+</button><button onclick="sendAction('ch_down')">CH-</button></div>
           </div>
-          <div class="grid-4" style="margin-top:10px;"><button class="btn-cmd" onclick="sendDevAction('hdmi1')">HDMI1</button><button class="btn-cmd" onclick="sendDevAction('hdmi2')">HDMI2</button><button class="btn-cmd" onclick="sendDevAction('hdmi3')">HDMI3</button><button class="btn-cmd" onclick="sendDevAction('hdmi4')">HDMI4</button></div>
+          <div class="grid-4" style="margin-top:10px;"><button class="btn-cmd" onclick="sendAction('hdmi1')">HDMI1</button><button class="btn-cmd" onclick="sendAction('hdmi2')">HDMI2</button><button class="btn-cmd" onclick="sendAction('hdmi3')">HDMI3</button><button class="btn-cmd" onclick="sendAction('hdmi4')">HDMI4</button></div>
         </div>`;
       }
       else if (typeVal === 7) { // TV VEON
-        document.getElementById("curDevLabel").innerText = "TV VEON";
         html = `<div class="remote-shell brand-generic">
-          <div class="remote-header">VEON TV</div>
-          <div class="grid-3"><button class="btn-power" onclick="sendDevAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendDevAction('sleep')">SLEEP</button><button class="btn-cmd" onclick="sendDevAction('source')">SOURCE</button></div>
-          <div class="d-pad"><button class="d-btn d-up" onclick="sendDevAction('up')">▲</button><button class="d-btn d-down" onclick="sendDevAction('down')">▼</button><button class="d-btn d-left" onclick="sendDevAction('left')">◄</button><button class="d-btn d-right" onclick="sendDevAction('right')">►</button><button class="d-btn d-ok" onclick="sendDevAction('select')">OK</button></div>
-          <div class="grid-3"><button class="btn-cmd" onclick="sendDevAction('menu')">MENU</button><button class="btn-cmd" onclick="sendDevAction('epg')">EPG</button><button class="btn-cmd" onclick="sendDevAction('exit')">EXIT</button></div>
+          <div class="remote-header">${devName} (VEON TV)</div>
+          <div class="grid-3"><button class="btn-power" onclick="sendAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendAction('sleep')">SLEEP</button><button class="btn-cmd" onclick="sendAction('source')">SOURCE</button></div>
+          <div class="d-pad"><button class="d-btn d-up" onclick="sendAction('up')">▲</button><button class="d-btn d-down" onclick="sendAction('down')">▼</button><button class="d-btn d-left" onclick="sendAction('left')">◄</button><button class="d-btn d-right" onclick="sendAction('right')">►</button><button class="d-btn d-ok" onclick="sendAction('select')">OK</button></div>
+          <div class="grid-3"><button class="btn-cmd" onclick="sendAction('menu')">MENU</button><button class="btn-cmd" onclick="sendAction('epg')">EPG</button><button class="btn-cmd" onclick="sendAction('exit')">EXIT</button></div>
           <div class="grid-3" style="align-items:center; margin-top:12px;">
-            <div class="pill-box"><button onclick="sendDevAction('vol_up')">VOL+</button><button onclick="sendDevAction('vol_down')">VOL-</button></div>
-            <button class="btn-cmd" onclick="sendDevAction('mute')">MUTE</button>
-            <div class="pill-box"><button onclick="sendDevAction('ch_up')">CH+</button><button onclick="sendDevAction('ch_down')">CH-</button></div>
+            <div class="pill-box"><button onclick="sendAction('vol_up')">VOL+</button><button onclick="sendAction('vol_down')">VOL-</button></div>
+            <button class="btn-cmd" onclick="sendAction('mute')">MUTE</button>
+            <div class="pill-box"><button onclick="sendAction('ch_up')">CH+</button><button onclick="sendAction('ch_down')">CH-</button></div>
           </div>
         </div>`;
       }
-      else if (typeVal >= 8 && typeVal <= 14) { // MÁY LẠNH (ĐIỀU HOÀ)
-        document.getElementById("curDevLabel").innerText = "Máy lạnh";
+      else if (typeVal === 8 || (typeVal >= 9 && typeVal <= 14)) { // MÁY LẠNH (ĐIỀU HOÀ)
         html = `<div class="remote-shell brand-ac">
-          <div class="remote-header">MÁY LẠNH (ĐIỀU HOÀ)</div>
+          <div class="remote-header">${devName} (MÁY LẠNH)</div>
           <div class="ac-display">
             <div style="font-size:36px; font-weight:bold;">25°C</div>
             <div style="font-size:13px; margin-top:5px;">MODE: COOL | FAN: AUTO</div>
           </div>
-          <div class="grid-2"><button class="btn-power" onclick="sendDevAction('power_toggle')">POWER ON/OFF</button><button class="btn-cmd" onclick="sendDevAction('fan_speed')">🪭 FAN SPEED</button></div>
+          <div class="grid-2"><button class="btn-power" onclick="sendAction('power_toggle')">POWER ON/OFF</button><button class="btn-cmd" onclick="sendAction('fan_speed')">🪭 FAN SPEED</button></div>
           <div class="grid-2" style="margin: 12px 0;">
-            <button class="btn-cmd" style="font-size:18px; padding:15px;" onclick="sendDevAction('temp_up')">TEMP +</button>
-            <button class="btn-cmd" style="font-size:18px; padding:15px;" onclick="sendDevAction('temp_down')">TEMP -</button>
+            <button class="btn-cmd" style="font-size:18px; padding:15px;" onclick="sendAction('temp_up')">TEMP +</button>
+            <button class="btn-cmd" style="font-size:18px; padding:15px;" onclick="sendAction('temp_down')">TEMP -</button>
           </div>
           <div class="grid-4">
-            <button class="btn-cmd" onclick="sendDevAction('mode_cool')">❄️ COOL</button>
-            <button class="btn-cmd" onclick="sendDevAction('mode_heat')">☀️ HEAT</button>
-            <button class="btn-cmd" onclick="sendDevAction('mode_dry')">💧 DRY</button>
-            <button class="btn-cmd" onclick="sendDevAction('mode_fan')">🌀 FAN</button>
+            <button class="btn-cmd" onclick="sendAction('mode_cool')">❄️ COOL</button>
+            <button class="btn-cmd" onclick="sendAction('mode_heat')">☀️ HEAT</button>
+            <button class="btn-cmd" onclick="sendAction('mode_dry')">💧 DRY</button>
+            <button class="btn-cmd" onclick="sendAction('mode_fan')">🌀 FAN</button>
           </div>
+          <div class="grid-2" style="margin-top:10px;"><button class="btn-cmd" onclick="sendAction('swing_v')">↕️ SWING DỌC</button><button class="btn-cmd" onclick="sendAction('swing_h')">↔️ SWING NGANG</button></div>
         </div>`;
       }
       else if (typeVal === 15) { // MÁY CHIẾU
-        document.getElementById("curDevLabel").innerText = "Máy chiếu";
         html = `<div class="remote-shell brand-projector">
-          <div class="remote-header">MÁY CHIẾU (PROJECTOR)</div>
-          <div class="grid-3"><button class="btn-power" onclick="sendDevAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendDevAction('hdmi')">HDMI</button><button class="btn-cmd" onclick="sendDevAction('vga')">VGA / COMPUTER</button></div>
-          <div class="d-pad"><button class="d-btn d-up" onclick="sendDevAction('up')">▲</button><button class="d-btn d-down" onclick="sendDevAction('down')">▼</button><button class="d-btn d-left" onclick="sendDevAction('left')">◄</button><button class="d-btn d-right" onclick="sendDevAction('right')">►</button><button class="d-btn d-ok" onclick="sendDevAction('select')">ENTER</button></div>
-          <div class="grid-3"><button class="btn-cmd" onclick="sendDevAction('menu')">MENU</button><button class="btn-cmd" onclick="sendDevAction('freeze')">FREEZE</button><button class="btn-cmd" onclick="sendDevAction('blank')">BLANK</button></div>
+          <div class="remote-header">${devName} (MÁY CHIẾU)</div>
+          <div class="grid-3"><button class="btn-power" onclick="sendAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendAction('hdmi')">HDMI</button><button class="btn-cmd" onclick="sendAction('vga')">VGA / COMPUTER</button></div>
+          <div class="d-pad"><button class="d-btn d-up" onclick="sendAction('up')">▲</button><button class="d-btn d-down" onclick="sendAction('down')">▼</button><button class="d-btn d-left" onclick="sendAction('left')">◄</button><button class="d-btn d-right" onclick="sendAction('right')">►</button><button class="d-btn d-ok" onclick="sendAction('select')">ENTER</button></div>
+          <div class="grid-3"><button class="btn-cmd" onclick="sendAction('menu')">MENU</button><button class="btn-cmd" onclick="sendAction('freeze')">FREEZE</button><button class="btn-cmd" onclick="sendAction('blank')">BLANK</button></div>
           <div class="grid-3" style="margin-top:10px;">
-            <button class="btn-cmd" onclick="sendDevAction('keystone_up')">📐 KEYSTONE +</button>
-            <button class="btn-cmd" onclick="sendDevAction('aspect')">🖼️ ASPECT</button>
-            <button class="btn-cmd" onclick="sendDevAction('keystone_down')">📐 KEYSTONE -</button>
+            <button class="btn-cmd" onclick="sendAction('keystone_up')">📐 KEYSTONE +</button>
+            <button class="btn-cmd" onclick="sendAction('aspect')">🖼️ ASPECT RATIO</button>
+            <button class="btn-cmd" onclick="sendAction('keystone_down')">📐 KEYSTONE -</button>
           </div>
         </div>`;
       }
       else if (typeVal === 16) { // SOUNDBAR
-        document.getElementById("curDevLabel").innerText = "Loa Soundbar";
         html = `<div class="remote-shell brand-generic">
-          <div class="remote-header">LOA SOUNDBAR</div>
-          <div class="grid-2"><button class="btn-power" onclick="sendDevAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendDevAction('mute')">MUTE</button></div>
-          <div class="grid-2" style="margin:12px 0;"><button class="btn-cmd" onclick="sendDevAction('vol_up')">VOLUME +</button><button class="btn-cmd" onclick="sendDevAction('vol_down')">VOLUME -</button></div>
-          <div class="grid-2"><button class="btn-cmd" onclick="sendDevAction('mode_bt')">BLUETOOTH</button><button class="btn-cmd" onclick="sendDevAction('mode_tv')">TV / OPT</button></div>
-          <div class="grid-3" style="margin-top:10px;"><button class="btn-cmd" onclick="sendDevAction('movie')">MOVIE</button><button class="btn-cmd" onclick="sendDevAction('music')">MUSIC</button><button class="btn-cmd" onclick="sendDevAction('surround')">SURROUND</button></div>
+          <div class="remote-header">${devName} (SOUNDBAR)</div>
+          <div class="grid-2"><button class="btn-power" onclick="sendAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendAction('mute')">MUTE</button></div>
+          <div class="grid-2" style="margin:12px 0;"><button class="btn-cmd" onclick="sendAction('vol_up')">VOLUME +</button><button class="btn-cmd" onclick="sendAction('vol_down')">VOLUME -</button></div>
+          <div class="grid-2"><button class="btn-cmd" onclick="sendAction('mode_bt')">BLUETOOTH</button><button class="btn-cmd" onclick="sendAction('mode_tv')">TV / OPT</button></div>
+          <div class="grid-3" style="margin-top:10px;"><button class="btn-cmd" onclick="sendAction('movie')">MOVIE</button><button class="btn-cmd" onclick="sendAction('music')">MUSIC</button><button class="btn-cmd" onclick="sendAction('surround')">SURROUND</button></div>
         </div>`;
       }
       else if (typeVal === 17) { // ROBOT HÚT BỤI
-        document.getElementById("curDevLabel").innerText = "Robot hút bụi";
         html = `<div class="remote-shell brand-generic">
-          <div class="remote-header">ROBOT HÚT BỤI</div>
-          <div class="grid-2"><button class="btn-power-on" onclick="sendDevAction('auto')">AUTO CLEAN</button><button class="btn-cmd" style="background:#f39c12; color:white;" onclick="sendDevAction('home_charge')">🏠 CHARGE</button></div>
-          <div class="d-pad"><button class="d-btn d-up" onclick="sendDevAction('up')">▲</button><button class="d-btn d-down" onclick="sendDevAction('down')">▼</button><button class="d-btn d-left" onclick="sendDevAction('left')">◄</button><button class="d-btn d-right" onclick="sendDevAction('right')">►</button><button class="d-btn d-ok" onclick="sendDevAction('auto')">START</button></div>
-          <div class="grid-2"><button class="btn-cmd" onclick="sendDevAction('edge')">EDGE CLEAN</button><button class="btn-cmd" onclick="sendDevAction('spot')">SPOT CLEAN</button></div>
+          <div class="remote-header">${devName} (ROBOT VACUUM)</div>
+          <div class="grid-2"><button class="btn-power-on" onclick="sendAction('auto')">AUTO CLEAN</button><button class="btn-cmd" style="background:#f39c12; color:white;" onclick="sendAction('home_charge')">🏠 CHARGE</button></div>
+          <div class="d-pad"><button class="d-btn d-up" onclick="sendAction('up')">▲</button><button class="d-btn d-down" onclick="sendAction('down')">▼</button><button class="d-btn d-left" onclick="sendAction('left')">◄</button><button class="d-btn d-right" onclick="sendAction('right')">►</button><button class="d-btn d-ok" onclick="sendAction('auto')">START</button></div>
+          <div class="grid-2"><button class="btn-cmd" onclick="sendAction('edge')">EDGE CLEAN</button><button class="btn-cmd" onclick="sendAction('spot')">SPOT CLEAN</button></div>
         </div>`;
       }
       else if (typeVal === 18) { // ĐÈN LED SMART
-        document.getElementById("curDevLabel").innerText = "Đèn Smart LED";
         html = `<div class="remote-shell brand-generic">
-          <div class="remote-header">ĐÈN SMART LED</div>
-          <div class="grid-2"><button class="btn-power-on" onclick="sendDevAction('power_on')">BẬT ĐÈN</button><button class="btn-power" onclick="sendDevAction('power_off')">TẮT ĐÈN</button></div>
-          <div class="grid-2" style="margin:12px 0;"><button class="btn-cmd" onclick="sendDevAction('bright_up')">☀️ TĂNG SÁNG</button><button class="btn-cmd" onclick="sendDevAction('bright_down')">🌙 GIẢM SÁNG</button></div>
-          <button class="btn-cmd" style="width:100%;" onclick="sendDevAction('mode')">🎨 CHUYỂN CHẾ ĐỘ MÀU</button>
+          <div class="remote-header">${devName} (ĐÈN SMART LED)</div>
+          <div class="grid-2"><button class="btn-power-on" onclick="sendAction('power_on')">BẬT ĐÈN</button><button class="btn-power" onclick="sendAction('power_off')">TẮT ĐÈN</button></div>
+          <div class="grid-2" style="margin:12px 0;"><button class="btn-cmd" onclick="sendAction('bright_up')">☀️ TĂNG SÁNG</button><button class="btn-cmd" onclick="sendAction('bright_down')">🌙 GIẢM SÁNG</button></div>
+          <button class="btn-cmd" style="width:100%;" onclick="sendAction('mode')">🎨 CHUYỂN CHẾ ĐỘ MÀU</button>
         </div>`;
       }
       else if (typeVal === 19) { // STB VU+ DUO2
-        document.getElementById("curDevLabel").innerText = "STB VU+ Duo2";
         html = `<div class="remote-shell brand-generic">
-          <div class="remote-header">STB VU+ DUO2</div>
-          <div class="grid-2"><button class="btn-power" onclick="sendDevAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendDevAction('mute')">MUTE</button></div>
-          <div class="grid-2" style="margin-top:10px;"><button class="btn-cmd" onclick="sendDevAction('vol_up')">VOL +</button><button class="btn-cmd" onclick="sendDevAction('vol_down')">VOL -</button></div>
+          <div class="remote-header">${devName} (STB VU+ DUO2)</div>
+          <div class="grid-2"><button class="btn-power" onclick="sendAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendAction('mute')">MUTE</button></div>
+          <div class="grid-2" style="margin-top:10px;"><button class="btn-cmd" onclick="sendAction('vol_up')">VOL +</button><button class="btn-cmd" onclick="sendAction('vol_down')">VOL -</button></div>
         </div>`;
       }
       else if (typeVal === 20) { // APPLE TV
-        document.getElementById("curDevLabel").innerText = "Apple TV";
         html = `<div class="remote-shell brand-generic">
-          <div class="remote-header">APPLE TV</div>
-          <div class="grid-2"><button class="btn-power-on" onclick="sendDevAction('power_on')">ON</button><button class="btn-power" onclick="sendDevAction('power_off')">OFF</button></div>
-          <div class="d-pad"><button class="d-btn d-up" onclick="sendDevAction('up')">▲</button><button class="d-btn d-down" onclick="sendDevAction('down')">▼</button><button class="d-btn d-left" onclick="sendDevAction('left')">◄</button><button class="d-btn d-right" onclick="sendDevAction('right')">►</button><button class="d-btn d-ok" onclick="sendDevAction('select')">SELECT</button></div>
-          <div class="grid-2"><button class="btn-cmd" onclick="sendDevAction('menu')">MENU</button><button class="btn-cmd" onclick="sendDevAction('play_pause')">PLAY / PAUSE</button></div>
+          <div class="remote-header">${devName} (APPLE TV)</div>
+          <div class="grid-2"><button class="btn-power-on" onclick="sendAction('power_on')">ON</button><button class="btn-power" onclick="sendAction('power_off')">OFF</button></div>
+          <div class="d-pad"><button class="d-btn d-up" onclick="sendAction('up')">▲</button><button class="d-btn d-down" onclick="sendAction('down')">▼</button><button class="d-btn d-left" onclick="sendAction('left')">◄</button><button class="d-btn d-right" onclick="sendAction('right')">►</button><button class="d-btn d-ok" onclick="sendAction('select')">SELECT</button></div>
+          <div class="grid-2"><button class="btn-cmd" onclick="sendAction('menu')">MENU</button><button class="btn-cmd" onclick="sendAction('play_pause')">PLAY / PAUSE</button></div>
         </div>`;
       }
       else if (typeVal === 21) { // Ổ CẮM THÔNG MINH
-        document.getElementById("curDevLabel").innerText = "Ổ cắm thông minh";
         html = `<div class="remote-shell brand-generic">
-          <div class="remote-header">Ổ CẮM THÔNG MINH</div>
-          <div class="grid-2"><button class="btn-power-on" style="padding:20px;" onclick="sendDevAction('power_on')">🔌 BẬT Ổ CẮM</button><button class="btn-power" style="padding:20px;" onclick="sendDevAction('power_off')">🚫 TẮT Ổ CẮM</button></div>
+          <div class="remote-header">${devName} (Ổ CẮM THÔNG MINH)</div>
+          <div class="grid-2"><button class="btn-power-on" style="padding:20px;" onclick="sendAction('power_on')">🔌 BẬT Ổ CẮM</button><button class="btn-power" style="padding:20px;" onclick="sendAction('power_off')">🚫 TẮT Ổ CẮM</button></div>
         </div>`;
       }
 
       container.innerHTML = html;
     }
 
-    // Khởi tạo giao diện mặc định (TV LG)
-    changeDeviceTypeUI(1);
-
-    // Web Speech API
+    // Web Speech API cho giọng nói qua Cloud MQTT
     let recognition = null;
     let isRecording = false;
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
