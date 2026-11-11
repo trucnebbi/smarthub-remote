@@ -166,7 +166,6 @@
     let AIO_TOPIC = "";
     let AIO_SYNC_TOPIC = "";
     
-    // Danh sách thiết bị đồng bộ trên Web tương ứng với ESP32
     let devicesList = [
       { name: "Smart TV LivingRoom", type: 1 }
     ];
@@ -179,7 +178,6 @@
       "🌐 AV Receiver (Ampli IP)", "🌐 Smart Speaker (Loa IP)", "🌐 Smart Bulb (Đèn IP)"
     ];
 
-    // Tự động load tài khoản cũ nếu có
     window.onload = function() {
       if(localStorage.getItem("aio_user")) document.getElementById("aio_user").value = localStorage.getItem("aio_user");
       if(localStorage.getItem("aio_key")) document.getElementById("aio_key").value = localStorage.getItem("aio_key");
@@ -204,7 +202,7 @@
       localStorage.setItem("aio_key", key);
 
       AIO_TOPIC = user + "/feeds/ir-command";
-      AIO_SYNC_TOPIC = user + "/feeds/device-sync"; // Feed lắng nghe đồng bộ từ ESP32
+      AIO_SYNC_TOPIC = user + "/feeds/device-sync";
 
       document.getElementById('status-text').innerText = 'Đang kết nối Cloud Adafruit IO...';
       document.getElementById('status-text').style.color = '#f1c40f';
@@ -229,34 +227,27 @@
         document.getElementById('status-text').style.color = '#2ecc71';
         console.log("✅ Kết nối MQTT Adafruit IO thành công!");
 
-        // Lắng nghe kênh đồng bộ thiết bị từ ESP32 gửi về
         client.subscribe(AIO_SYNC_TOPIC, function (err) {
           if (!err) console.log("✅ Đã subscribe thành công kênh đồng bộ thiết bị!");
         });
       });
 
-      // Nhận thông điệp đồng bộ trạng thái từ ESP32 qua Adafruit IO
-      // Tìm đoạn này trong thẻ <script> của file index.html và cập nhật lại:
-client.on('message', function (topic, payload) {
-  if (topic.includes("device-sync")) {
-    try {
-      let data = JSON.parse(payload.toString());
-      console.log("🔄 Nhận danh sách thiết bị đồng bộ từ nhà: ", data);
-      
-      if (data.devices && Array.isArray(data.devices)) {
-        // Cập nhật lại mảng danh sách thiết bị trên web khớp hoàn toàn với ở nhà
-        devicesList = data.devices;
-        
-        // Tự động cập nhật lại giao diện bộ chọn và vẽ lại khung remote tương ứng
-        updateDeviceSelectorUI();
-        
-        console.log("🔔 Đã tự động cập nhật " + data.count + " thiết bị từ nhà lên web!");
-      }
-    } catch(e) {
-      console.error("Lỗi parse JSON sync từ ESP32:", e);
-    }
-  }
-});
+      client.on('message', function (topic, payload) {
+        if (topic.includes("device-sync")) {
+          try {
+            let data = JSON.parse(payload.toString());
+            console.log("🔄 Nhận danh sách thiết bị đồng bộ từ nhà: ", data);
+            
+            if (data.devices && Array.isArray(data.devices)) {
+              devicesList = data.devices;
+              updateDeviceSelectorUI();
+              console.log("🔔 Đã tự động cập nhật " + data.count + " thiết bị từ nhà lên web!");
+            }
+          } catch(e) {
+            console.error("Lỗi parse JSON sync từ ESP32:", e);
+          }
+        }
+      });
 
       client.on('error', function (err) {
         document.getElementById('dot').className = 'status-dot';
@@ -285,13 +276,11 @@ client.on('message', function (topic, payload) {
       }
     }
 
-    // Gửi lệnh theo chuẩn định dạng [devIndex],[action] mà code ESP32 đang đọc
     function sendAction(act) {
       let devIdx = document.getElementById("deviceSelector").value;
       sendCmd(devIdx + "," + act);
     }
 
-    // Hàm đọc file ir_database.json trên GitHub Pages và phát xung Raw qua ESP32
     async function sendIRFromGitHubJSON() {
       let brand = document.getElementById('jsonBrandSelect').value;
       let cmdName = document.getElementById('jsonCommand').value.trim();
@@ -398,14 +387,14 @@ client.on('message', function (topic, payload) {
       let container = document.getElementById("remoteContainer");
       let html = "";
 
-      if (typeVal >= 22 && typeVal <= 27) { // NHÓM THIẾT BỊ MẠNG IP
+      if (typeVal >= 22 && typeVal <= 27) {
         html = `<div class="remote-shell brand-ip">
           <div class="remote-header">${devName} (ĐIỀU KHIỂN QUA IP)</div>
           <div class="grid-2"><button class="btn-power" onclick="sendAction('power_toggle')">POWER ON/OFF</button><button class="btn-cmd" onclick="sendAction('mute')">MUTE</button></div>
           <div class="grid-3"><button class="btn-cmd" onclick="sendAction('vol_up')">VOL +</button><button class="btn-cmd" onclick="sendAction('vol_down')">VOL -</button><button class="btn-cmd" onclick="sendAction('source')">INPUT</button></div>
         </div>`;
       }
-      else if (typeVal === 0) { // THIẾT BỊ HỌC IR
+      else if (typeVal === 0) {
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">${devName} (THIẾT BỊ HỌC IR)</div>
           <button class="btn-power" style="width:100%; padding:15px;" onclick="sendAction('power_toggle')">📡 PHÁT MÃ IR ĐÃ HỌC</button>
@@ -415,7 +404,7 @@ client.on('message', function (topic, payload) {
           </div>
         </div>`;
       }
-      else if (typeVal === 1) { // TV LG
+      else if (typeVal === 1) {
         html = `<div class="remote-shell brand-lg">
           <div class="remote-header">${devName} (LG WEBOS)</div>
           <div class="grid-2"><button class="btn-power" onclick="sendAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendAction('input')">INPUT</button></div>
@@ -431,7 +420,7 @@ client.on('message', function (topic, payload) {
           <div class="grid-2" style="margin-top:10px;"><button class="btn-cmd" onclick="sendAction('list')">CH LIST</button><button class="btn-cmd" onclick="sendAction('livetv')">LIVE TV</button></div>
         </div>`;
       } 
-      else if (typeVal === 2) { // TV SAMSUNG
+      else if (typeVal === 2) {
         html = `<div class="remote-shell brand-samsung">
           <div class="remote-header">${devName} (SAMSUNG SMART)</div>
           <div class="grid-3"><button class="btn-power-on" onclick="sendAction('power_on')">ON</button><button class="btn-power" onclick="sendAction('power_off')">OFF</button><button class="btn-cmd" onclick="sendAction('source')">SOURCE</button></div>
@@ -447,7 +436,7 @@ client.on('message', function (topic, payload) {
           <div class="grid-3" style="margin-top:10px;"><button class="btn-cmd" onclick="sendAction('emanual')">E-MANUAL</button><button class="btn-cmd" onclick="sendAction('mode3d')">3D</button><button class="btn-cmd" onclick="sendAction('prechn')">PRE-CHN</button></div>
         </div>`;
       }
-      else if (typeVal === 3) { // TV TCL P715
+      else if (typeVal === 3) {
         html = `<div class="remote-shell brand-tcl">
           <div class="remote-header">${devName} (TCL 55P715)</div>
           <div class="grid-2"><button class="btn-power" onclick="sendAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendAction('source')">SOURCE</button></div>
@@ -462,7 +451,7 @@ client.on('message', function (topic, payload) {
           <button class="btn-cmd" style="width:100%; margin-top:10px; background:#e50914; color:white;" onclick="sendAction('netflix')">NETFLIX</button>
         </div>`;
       }
-      else if (typeVal === 4) { // TV TCL RC833
+      else if (typeVal === 4) {
         html = `<div class="remote-shell brand-tcl">
           <div class="remote-header">${devName} (TCL RC833)</div>
           <div class="grid-3"><button class="btn-power" onclick="sendAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendAction('googlemic')">🎤 MIC</button><button class="btn-cmd" onclick="sendAction('account')">ACCOUNT</button></div>
@@ -475,10 +464,10 @@ client.on('message', function (topic, payload) {
             <div class="pill-box"><button onclick="sendAction('ch_up')">CH+</button><button onclick="sendAction('ch_down')">CH-</button></div>
           </div>
           <div class="grid-2" style="margin-top:10px;"><button class="btn-cmd" style="background:#e50914; color:white;" onclick="sendAction('netflix')">NETFLIX</button><button class="btn-cmd" style="background:#ff0000; color:white;" onclick="sendAction('youtube')">YOUTUBE</button></div>
-          <div class="grid-2"><button class="btn-cmd" style="background:#00a8e1; color:white;" onclick="sendAction('prime')">PRIME VIDEO</button><button class="btn-cmd" onclick="sendAction('tclchannel')">TCL CHANNEL</button></div>
+          <div class="grid-2"><button class="btn-cmd" style="background:#00a8e1; color:white;" onclick="sendAction('prime')">PRIME VIDEO</button><button class="btn-cmd" style="background:#tclchannel">TCL CHANNEL</button></div>
         </div>`;
       }
-      else if (typeVal === 5) { // TV PANASONIC
+      else if (typeVal === 5) {
         html = `<div class="remote-shell brand-panasonic">
           <div class="remote-header">${devName} (PANASONIC VIERA)</div>
           <div class="grid-3"><button class="btn-power" onclick="sendAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendAction('tv')">TV</button><button class="btn-cmd" onclick="sendAction('av')">AV</button></div>
@@ -493,7 +482,7 @@ client.on('message', function (topic, payload) {
           <div class="grid-3" style="margin-top:10px;"><button class="btn-cmd" onclick="sendAction('picture')">PICTURE</button><button class="btn-cmd" onclick="sendAction('help')">HELP</button><button class="btn-cmd" style="background:#e50914; color:white;" onclick="sendAction('netflix')">NETFLIX</button></div>
         </div>`;
       }
-      else if (typeVal === 6) { // TV SONY
+      else if (typeVal === 6) {
         html = `<div class="remote-shell brand-sony">
           <div class="remote-header">${devName} (SONY BRAVIA)</div>
           <div class="grid-3"><button class="btn-power-on" onclick="sendAction('power_on')">ON</button><button class="btn-power" onclick="sendAction('power_off')">OFF</button><button class="btn-cmd" onclick="sendAction('source')">INPUT</button></div>
@@ -508,7 +497,7 @@ client.on('message', function (topic, payload) {
           <div class="grid-4" style="margin-top:10px;"><button class="btn-cmd" onclick="sendAction('hdmi1')">HDMI1</button><button class="btn-cmd" onclick="sendAction('hdmi2')">HDMI2</button><button class="btn-cmd" onclick="sendAction('hdmi3')">HDMI3</button><button class="btn-cmd" onclick="sendAction('hdmi4')">HDMI4</button></div>
         </div>`;
       }
-      else if (typeVal === 7) { // TV VEON
+      else if (typeVal === 7) {
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">${devName} (VEON TV)</div>
           <div class="grid-3"><button class="btn-power" onclick="sendAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendAction('sleep')">SLEEP</button><button class="btn-cmd" onclick="sendAction('source')">SOURCE</button></div>
@@ -521,7 +510,7 @@ client.on('message', function (topic, payload) {
           </div>
         </div>`;
       }
-      else if (typeVal === 8 || (typeVal >= 9 && typeVal <= 14)) { // MÁY LẠNH (ĐIỀU HOÀ)
+      else if (typeVal === 8 || (typeVal >= 9 && typeVal <= 14)) {
         html = `<div class="remote-shell brand-ac">
           <div class="remote-header">${devName} (MÁY LẠNH)</div>
           <div class="ac-display">
@@ -542,7 +531,7 @@ client.on('message', function (topic, payload) {
           <div class="grid-2" style="margin-top:10px;"><button class="btn-cmd" onclick="sendAction('swing_v')">↕️ SWING DỌC</button><button class="btn-cmd" onclick="sendAction('swing_h')">↔️ SWING NGANG</button></div>
         </div>`;
       }
-      else if (typeVal === 15) { // MÁY CHIẾU
+      else if (typeVal === 15) {
         html = `<div class="remote-shell brand-projector">
           <div class="remote-header">${devName} (MÁY CHIẾU)</div>
           <div class="grid-3"><button class="btn-power" onclick="sendAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendAction('hdmi')">HDMI</button><button class="btn-cmd" onclick="sendAction('vga')">VGA / COMPUTER</button></div>
@@ -555,7 +544,7 @@ client.on('message', function (topic, payload) {
           </div>
         </div>`;
       }
-      else if (typeVal === 16) { // SOUNDBAR
+      else if (typeVal === 16) {
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">${devName} (SOUNDBAR)</div>
           <div class="grid-2"><button class="btn-power" onclick="sendAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendAction('mute')">MUTE</button></div>
@@ -564,7 +553,7 @@ client.on('message', function (topic, payload) {
           <div class="grid-3" style="margin-top:10px;"><button class="btn-cmd" onclick="sendAction('movie')">MOVIE</button><button class="btn-cmd" onclick="sendAction('music')">MUSIC</button><button class="btn-cmd" onclick="sendAction('surround')">SURROUND</button></div>
         </div>`;
       }
-      else if (typeVal === 17) { // ROBOT HÚT BỤI
+      else if (typeVal === 17) {
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">${devName} (ROBOT VACUUM)</div>
           <div class="grid-2"><button class="btn-power-on" onclick="sendAction('auto')">AUTO CLEAN</button><button class="btn-cmd" style="background:#f39c12; color:white;" onclick="sendAction('home_charge')">🏠 CHARGE</button></div>
@@ -572,7 +561,7 @@ client.on('message', function (topic, payload) {
           <div class="grid-2"><button class="btn-cmd" onclick="sendAction('edge')">EDGE CLEAN</button><button class="btn-cmd" onclick="sendAction('spot')">SPOT CLEAN</button></div>
         </div>`;
       }
-      else if (typeVal === 18) { // ĐÈN LED SMART
+      else if (typeVal === 18) {
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">${devName} (ĐÈN SMART LED)</div>
           <div class="grid-2"><button class="btn-power-on" onclick="sendAction('power_on')">BẬT ĐÈN</button><button class="btn-power" onclick="sendAction('power_off')">TẮT ĐÈN</button></div>
@@ -580,14 +569,14 @@ client.on('message', function (topic, payload) {
           <button class="btn-cmd" style="width:100%;" onclick="sendAction('mode')">🎨 CHUYỂN CHẾ ĐỘ MÀU</button>
         </div>`;
       }
-      else if (typeVal === 19) { // STB VU+ DUO2
+      else if (typeVal === 19) {
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">${devName} (STB VU+ DUO2)</div>
           <div class="grid-2"><button class="btn-power" onclick="sendAction('power_toggle')">POWER</button><button class="btn-cmd" onclick="sendAction('mute')">MUTE</button></div>
           <div class="grid-2" style="margin-top:10px;"><button class="btn-cmd" onclick="sendAction('vol_up')">VOL +</button><button class="btn-cmd" onclick="sendAction('vol_down')">VOL -</button></div>
         </div>`;
       }
-      else if (typeVal === 20) { // APPLE TV
+      else if (typeVal === 20) {
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">${devName} (APPLE TV)</div>
           <div class="grid-2"><button class="btn-power-on" onclick="sendAction('power_on')">ON</button><button class="btn-power" onclick="sendAction('power_off')">OFF</button></div>
@@ -595,7 +584,7 @@ client.on('message', function (topic, payload) {
           <div class="grid-2"><button class="btn-cmd" onclick="sendAction('menu')">MENU</button><button class="btn-cmd" onclick="sendAction('play_pause')">PLAY / PAUSE</button></div>
         </div>`;
       }
-      else if (typeVal === 21) { // Ổ CẮM THÔNG MINH
+      else if (typeVal === 21) {
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">${devName} (Ổ CẮM THÔNG MINH)</div>
           <div class="grid-2"><button class="btn-power-on" style="padding:20px;" onclick="sendAction('power_on')">🔌 BẬT Ổ CẮM</button><button class="btn-power" style="padding:20px;" onclick="sendAction('power_off')">🚫 TẮT Ổ CẮM</button></div>
@@ -605,7 +594,6 @@ client.on('message', function (topic, payload) {
       container.innerHTML = html;
     }
 
-    // Web Speech API cho giọng nói qua Cloud MQTT
     let recognition = null;
     let isRecording = false;
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
