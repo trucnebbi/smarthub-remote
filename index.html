@@ -13,9 +13,10 @@
     .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #e74c3c; margin-right: 8px; }
     .status-dot.online { background: #2ecc71; }
 
-    .config-box, .selector-box, .add-preset-box { background: #222634; padding: 12px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #3d445e; text-align: left; }
+    .config-box, .selector-box, .add-preset-box, .irdb-box, .ip-config-box { background: #222634; padding: 12px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #3d445e; text-align: left; }
     select, input { padding: 10px; font-size: 14px; width: 100%; border-radius: 8px; border: 1px solid #4a5475; font-weight: bold; color: #fff; background: #2c3246; box-sizing: border-box; margin-top: 6px; }
     .btn-add { background: #3498db; color: white; border: none; padding: 10px; width: 100%; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 8px; }
+    .btn-irdb { background: #27ae60; color: white; border: none; padding: 10px; width: 100%; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 8px; }
 
     .voice-box { background: linear-gradient(135deg, #d35400, #e67e22); border-radius: 14px; padding: 12px; margin-bottom: 15px; color: white; }
     .btn-mic { background: #a04000; color: white; border: none; padding: 10px; font-size: 15px; border-radius: 25px; cursor: pointer; font-weight: bold; width: 100%; }
@@ -31,6 +32,7 @@
     .brand-ac { background: #112836; border: 2px solid #00a8ff; }
     .brand-projector { background: #221f3b; border: 2px solid #8e44ad; }
     .brand-generic { background: #212529; border: 2px solid #495057; }
+    .brand-ip { background: #0e3b43; border: 2px solid #00b4d8; }
 
     .remote-header { font-size: 17px; font-weight: bold; margin-bottom: 12px; color: #f1c40f; text-transform: uppercase; letter-spacing: 1px; }
 
@@ -80,6 +82,25 @@
       <button class="btn-add" onclick="connectMQTT()">LƯU & KẾT NỐI CLOUD</button>
     </div>
 
+    <!-- Hộp nhập IP ESP32 trên LAN để hỗ trợ gọi trực tiếp lệnh IRDB từ GitHub JSON sang ESP32 -->
+    <div class="ip-config-box">
+      <h4 style="color:#00b4d8; margin:0 0 6px 0;">🔗 ĐỊA CHỈ IP ESP32 TRÊN LAN (Tùy chọn)</h4>
+      <input type="text" id="espIpInput" placeholder="VD: 192.168.1.150" value="">
+    </div>
+
+    <!-- Hộp chọn và gửi mã IR trực tiếp từ kho GitHub (ir_database.json) -->
+    <div class="irdb-box">
+      <h4 style="color:#2ecc71; margin:0 0 6px 0;">📡 GỬI MÃ IR TỪ KHO GITHUB (IRDB)</h4>
+      <label style="font-size: 12px;">Chọn hãng thiết bị:</label>
+      <select id="jsonBrandSelect">
+        <option value="lg">LG TV (GitHub JSON)</option>
+        <option value="sony">Sony Bravia (GitHub JSON)</option>
+      </select>
+      <label style="font-size: 12px; margin-top: 8px; display: block;">Tên lệnh (Command):</label>
+      <input type="text" id="jsonCommand" placeholder="VD: power_toggle, vol_up..." value="power_toggle">
+      <button type="button" class="btn-irdb" onclick="sendIRFromGitHubJSON()">🚀 PHÁT MÃ IR TỪ GITHUB</button>
+    </div>
+
     <button class="btn-reset-wifi" onclick="resetWiFiRemote()">🔄 RESET WI-FI GIA ĐÌNH (XÓA MẠNG)</button>
 
     <div class="voice-box">
@@ -91,13 +112,34 @@
       <h4 style="color:#3498db; margin:0 0 6px 0;">➕ Thêm Remote có sẵn</h4>
       <input type="text" id="presetName" placeholder="Tên thiết bị..." required>
       <select id="presetType">
-        <option value="0">Thiet bi hoc IR</option><option value="1">TV LG</option><option value="2">TV Samsung</option>
-        <option value="3">TV TCL (P715)</option><option value="4">TV TCL (RC833)</option><option value="5">TV Panasonic</option>
-        <option value="6">TV Sony</option><option value="7">TV VEON</option><option value="8">May lanh (Chung)</option>
-        <option value="9">May lanh Daikin</option><option value="10">May lanh Panasonic</option><option value="11">May lanh LG</option>
-        <option value="12">May lanh Gree/TCL</option><option value="13">May lanh Midea/Carrier</option><option value="14">May lanh Toshiba</option>
-        <option value="15">May chieu</option><option value="16">Loa Soundbar</option><option value="17">Robot hut bui</option>
-        <option value="18">Den Smart LED</option><option value="19">STB VU+ Duo2</option><option value="20">Apple TV</option><option value="21">O cam</option>
+        <option value="0">Thiet bi hoc IR</option>
+        <option value="1">TV LG</option>
+        <option value="2">TV Samsung</option>
+        <option value="3">TV TCL (P715)</option>
+        <option value="4">TV TCL (RC833)</option>
+        <option value="5">TV Panasonic</option>
+        <option value="6">TV Sony</option>
+        <option value="7">TV VEON</option>
+        <option value="8">May lanh (Chung)</option>
+        <option value="9">May lanh Daikin</option>
+        <option value="10">May lanh Panasonic</option>
+        <option value="11">May lanh LG</option>
+        <option value="12">May lanh Gree/TCL</option>
+        <option value="13">May lanh Midea/Carrier</option>
+        <option value="14">May lanh Toshiba</option>
+        <option value="15">May chieu</option>
+        <option value="16">Loa Soundbar</option>
+        <option value="17">Robot hut bui</option>
+        <option value="18">Den Smart LED</option>
+        <option value="19">STB VU+ Duo2</option>
+        <option value="20">Apple TV</option>
+        <option value="21">O cam</option>
+        <option value="22">🌐 TV LG (IP Network)</option>
+        <option value="23">🌐 TV Samsung (IP Network)</option>
+        <option value="24">🌐 Android/Sony TV (IP Network)</option>
+        <option value="25">🌐 AV Receiver (Ampli IP)</option>
+        <option value="26">🌐 Smart Speaker (Loa IP)</option>
+        <option value="27">🌐 Smart Bulb (Đèn IP)</option>
       </select>
       <button type="button" class="btn-add" onclick="addPresetCloud()">TẠO REMOTE MỚI</button>
     </div>
@@ -131,13 +173,17 @@
     const DEV_NAMES_WITH_ICON = [
       "Thiet bi hoc IR", "TV LG", "TV Samsung", "TV TCL (P715)", "TV TCL (RC833)", "TV Panasonic", "TV Sony", "TV VEON",
       "May lanh (Chung)", "May lanh Daikin", "May lanh Panasonic", "May lanh LG", "May lanh Gree/TCL", "May lanh Midea/Carrier", "May lanh Toshiba",
-      "May chieu", "Loa Soundbar", "Robot hut bui", "Den Smart LED", "STB VU+ Duo2", "Apple TV", "O cam"
+      "May chieu", "Loa Soundbar", "Robot hut bui", "Den Smart LED", "STB VU+ Duo2", "Apple TV", "O cam",
+      "🌐 TV LG (IP Network)", "🌐 TV Samsung (IP Network)", "🌐 Android/Sony TV (IP Network)",
+      "🌐 AV Receiver (Ampli IP)", "🌐 Smart Speaker (Loa IP)", "🌐 Smart Bulb (Đèn IP)"
     ];
 
     // Tự động load tài khoản cũ nếu có
     window.onload = function() {
       if(localStorage.getItem("aio_user")) document.getElementById("aio_user").value = localStorage.getItem("aio_user");
       if(localStorage.getItem("aio_key")) document.getElementById("aio_key").value = localStorage.getItem("aio_key");
+      if(localStorage.getItem("esp_ip")) document.getElementById("espIpInput").value = localStorage.getItem("esp_ip");
+
       if(localStorage.getItem("aio_user") && localStorage.getItem("aio_key")) {
         connectMQTT();
       }
@@ -215,6 +261,41 @@
       sendCmd(devIdx + "," + act);
     }
 
+    // Hàm đọc file ir_database.json trên GitHub Pages và phát xung Raw qua ESP32
+    async function sendIRFromGitHubJSON() {
+      let brand = document.getElementById('jsonBrandSelect').value;
+      let cmdName = document.getElementById('jsonCommand').value.trim();
+      let espIp = document.getElementById('espIpInput').value.trim();
+      
+      if(espIp) localStorage.setItem("esp_ip", espIp);
+
+      try {
+        let response = await fetch('./ir_database.json');
+        if (!response.ok) throw new Error("Không thể tải file ir_database.json từ GitHub");
+        
+        let db = await response.json();
+
+        if (db[brand] && db[brand].commands && db[brand].commands[cmdName]) {
+          let rawArray = db[brand].commands[cmdName];
+          let rawStringPayload = 'raw,' + rawArray.join(',');
+
+          if (espIp) {
+            let targetUrl = `http://${espIp}/send-raw-mqtt?data=${encodeURIComponent(rawStringPayload)}`;
+            await fetch(targetUrl, { mode: 'no-cors' });
+            alert(`Đã truyền lệnh [${cmdName}] trực tiếp tới ESP32 (${espIp})!`);
+          } else {
+            sendCmd(rawStringPayload);
+            alert(`Đã đẩy lệnh [${cmdName}] qua Cloud MQTT tới ESP32!`);
+          }
+        } else {
+          alert("Không tìm thấy hãng hoặc tên lệnh trong file ir_database.json trên GitHub!");
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Lỗi khi tải hoặc phân tích file ir_database.json từ GitHub.");
+      }
+    }
+
     function resetWiFiRemote() {
       if (confirm("Bạn có chắc chắn muốn xóa Wi-Fi đã lưu trên ESP32 không? Thiết bị sẽ ngắt kết nối và quay về phát AP 192.168.4.1")) {
         sendCmd("reset_wifi");
@@ -287,7 +368,14 @@
       let container = document.getElementById("remoteContainer");
       let html = "";
 
-      if (typeVal === 0) { // THIẾT BỊ HỌC IR
+      if (typeVal >= 22 && typeVal <= 27) { // NHÓM THIẾT BỊ MẠNG IP
+        html = `<div class="remote-shell brand-ip">
+          <div class="remote-header">${devName} (ĐIỀU KHIỂN QUA IP)</div>
+          <div class="grid-2"><button class="btn-power" onclick="sendAction('power_toggle')">POWER ON/OFF</button><button class="btn-cmd" onclick="sendAction('mute')">MUTE</button></div>
+          <div class="grid-3"><button class="btn-cmd" onclick="sendAction('vol_up')">VOL +</button><button class="btn-cmd" onclick="sendAction('vol_down')">VOL -</button><button class="btn-cmd" onclick="sendAction('source')">INPUT</button></div>
+        </div>`;
+      }
+      else if (typeVal === 0) { // THIẾT BỊ HỌC IR
         html = `<div class="remote-shell brand-generic">
           <div class="remote-header">${devName} (THIẾT BỊ HỌC IR)</div>
           <button class="btn-power" style="width:100%; padding:15px;" onclick="sendAction('power_toggle')">📡 PHÁT MÃ IR ĐÃ HỌC</button>
@@ -357,7 +445,7 @@
             <div class="pill-box"><button onclick="sendAction('ch_up')">CH+</button><button onclick="sendAction('ch_down')">CH-</button></div>
           </div>
           <div class="grid-2" style="margin-top:10px;"><button class="btn-cmd" style="background:#e50914; color:white;" onclick="sendAction('netflix')">NETFLIX</button><button class="btn-cmd" style="background:#ff0000; color:white;" onclick="sendAction('youtube')">YOUTUBE</button></div>
-          <div class="grid-2"><button class="btn-cmd" style="background:#00a8e1; color:white;" onclick="sendAction('prime')">PRIME VIDEO</button><button class="btn-cmd" style="background:#tclchannel" onclick="sendAction('tclchannel')">TCL CHANNEL</button></div>
+          <div class="grid-2"><button class="btn-cmd" style="background:#00a8e1; color:white;" onclick="sendAction('prime')">PRIME VIDEO</button><button class="btn-cmd" onclick="sendAction('tclchannel')">TCL CHANNEL</button></div>
         </div>`;
       }
       else if (typeVal === 5) { // TV PANASONIC
