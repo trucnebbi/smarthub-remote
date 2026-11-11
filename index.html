@@ -236,19 +236,27 @@
       });
 
       // Nhận thông điệp đồng bộ trạng thái từ ESP32 qua Adafruit IO
-      client.on('message', function (topic, payload) {
-        if (topic.includes("device-sync")) {
-          try {
-            let data = JSON.parse(payload.toString());
-            console.log("🔄 Nhận cập nhật trạng thái thiết bị từ nhà: ", data);
-            // Hiển thị thông báo hoặc cập nhật giao diện
-            alert("🔔 Thiết bị ở nhà vừa có cập nhật mới! Tổng số thiết bị: " + data.count + " (Mới nhất: " + data.latest + ")");
-            // Bạn có thể tùy chỉnh thêm logic đồng bộ mảng devicesList ở đây nếu lưu thêm danh sách JSON
-          } catch(e) {
-            console.error("Lỗi parse JSON sync:", e);
-          }
-        }
-      });
+      // Tìm đoạn này trong thẻ <script> của file index.html và cập nhật lại:
+client.on('message', function (topic, payload) {
+  if (topic.includes("device-sync")) {
+    try {
+      let data = JSON.parse(payload.toString());
+      console.log("🔄 Nhận danh sách thiết bị đồng bộ từ nhà: ", data);
+      
+      if (data.devices && Array.isArray(data.devices)) {
+        // Cập nhật lại mảng danh sách thiết bị trên web khớp hoàn toàn với ở nhà
+        devicesList = data.devices;
+        
+        // Tự động cập nhật lại giao diện bộ chọn và vẽ lại khung remote tương ứng
+        updateDeviceSelectorUI();
+        
+        console.log("🔔 Đã tự động cập nhật " + data.count + " thiết bị từ nhà lên web!");
+      }
+    } catch(e) {
+      console.error("Lỗi parse JSON sync từ ESP32:", e);
+    }
+  }
+});
 
       client.on('error', function (err) {
         document.getElementById('dot').className = 'status-dot';
