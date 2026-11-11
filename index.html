@@ -164,6 +164,7 @@
   <script>
     let client = null;
     let AIO_TOPIC = "";
+    let AIO_SYNC_TOPIC = "";
     
     // Danh sách thiết bị đồng bộ trên Web tương ứng với ESP32
     let devicesList = [
@@ -203,6 +204,7 @@
       localStorage.setItem("aio_key", key);
 
       AIO_TOPIC = user + "/feeds/ir-command";
+      AIO_SYNC_TOPIC = user + "/feeds/device-sync"; // Feed lắng nghe đồng bộ từ ESP32
 
       document.getElementById('status-text').innerText = 'Đang kết nối Cloud Adafruit IO...';
       document.getElementById('status-text').style.color = '#f1c40f';
@@ -226,6 +228,26 @@
         document.getElementById('status-text').innerText = 'Đã kết nối Cloud Adafruit IO!';
         document.getElementById('status-text').style.color = '#2ecc71';
         console.log("✅ Kết nối MQTT Adafruit IO thành công!");
+
+        // Lắng nghe kênh đồng bộ thiết bị từ ESP32 gửi về
+        client.subscribe(AIO_SYNC_TOPIC, function (err) {
+          if (!err) console.log("✅ Đã subscribe thành công kênh đồng bộ thiết bị!");
+        });
+      });
+
+      // Nhận thông điệp đồng bộ trạng thái từ ESP32 qua Adafruit IO
+      client.on('message', function (topic, payload) {
+        if (topic.includes("device-sync")) {
+          try {
+            let data = JSON.parse(payload.toString());
+            console.log("🔄 Nhận cập nhật trạng thái thiết bị từ nhà: ", data);
+            // Hiển thị thông báo hoặc cập nhật giao diện
+            alert("🔔 Thiết bị ở nhà vừa có cập nhật mới! Tổng số thiết bị: " + data.count + " (Mới nhất: " + data.latest + ")");
+            // Bạn có thể tùy chỉnh thêm logic đồng bộ mảng devicesList ở đây nếu lưu thêm danh sách JSON
+          } catch(e) {
+            console.error("Lỗi parse JSON sync:", e);
+          }
+        }
       });
 
       client.on('error', function (err) {
