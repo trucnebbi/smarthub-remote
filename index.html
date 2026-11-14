@@ -17,7 +17,7 @@
     select, input { padding: 10px; font-size: 14px; width: 100%; border-radius: 8px; border: 1px solid #4a5475; font-weight: bold; color: #fff; background: #2c3246; box-sizing: border-box; margin-top: 6px; }
     .btn-add { background: #3498db; color: white; border: none; padding: 10px; width: 100%; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 8px; }
     .btn-irdb { background: #27ae60; color: white; border: none; padding: 10px; width: 100%; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 8px; }
-    .btn-sync { background: #2980b9; color: white; border: none; padding: 9px; width: 100%; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 6px; font-size: 12px; }
+    .btn-sync { background: #2980b9; color: white; border: none; padding: 10px; width: 100%; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 8px; }
 
     .voice-box { background: linear-gradient(135deg, #d35400, #e67e22); border-radius: 14px; padding: 12px; margin-bottom: 15px; color: white; }
     .btn-mic { background: #a04000; color: white; border: none; padding: 10px; font-size: 15px; border-radius: 25px; cursor: pointer; font-weight: bold; width: 100%; }
@@ -89,11 +89,11 @@
       <input type="text" id="espIpInput" placeholder="VD: 192.168.1.150" value="">
     </div>
 
-    <!-- Hộp Đồng bộ & Nhớ máy LocalStorage -->
+    <!-- Hộp Đồng bộ danh sách thiết bị từ ESP32 qua Cloud Adafruit IO -->
     <div class="sync-box">
-      <h4 style="color:#2ecc71; margin:0 0 6px 0;">🔄 ĐỒNG BỘ & LƯU TRỮ CỤ BỘ</h4>
-      <p style="font-size: 11px; color: #a0aec0; margin: 4px 0 8px 0;">Dữ liệu thiết bị sẽ tự lưu trên trình duyệt này. Bạn có thể kết nối nội bộ để lấy danh sách từ ESP32.</p>
-      <button type="button" class="btn-sync" onclick="syncDevicesFromESP32IP()">📥 Kéo danh sách từ ESP32 qua IP LAN</button>
+      <h4 style="color:#2ecc71; margin:0 0 6px 0;">🔄 ĐỒNG BỘ THIẾT BỊ TỪ ESP32</h4>
+      <p style="font-size: 11px; color: #a0aec0; margin: 4px 0 8px 0;">Lấy danh sách thiết bị mới nhất từ ESP32 thông qua Cloud Adafruit IO.</p>
+      <button type="button" class="btn-sync" onclick="requestSyncFromESP32()">📥 Đồng bộ danh sách từ ESP32</button>
     </div>
 
     <!-- Hộp chọn và gửi mã IR trực tiếp từ kho GitHub (ir_database.json) -->
@@ -174,7 +174,6 @@
     let AIO_TOPIC = "";
     let AIO_SYNC_TOPIC = "";
     
-    // Mặc định danh sách thiết bị ban đầu
     let devicesList = [
       { name: "Smart TV LivingRoom", type: 1 }
     ];
@@ -192,7 +191,7 @@
       if(localStorage.getItem("aio_key")) document.getElementById("aio_key").value = localStorage.getItem("aio_key");
       if(localStorage.getItem("esp_ip")) document.getElementById("espIpInput").value = localStorage.getItem("esp_ip");
 
-      // Khôi phục danh sách thiết bị đã lưu từ LocalStorage nếu có
+      // Khôi phục danh sách thiết bị từ LocalStorage nếu có trước đó
       let savedDevices = localStorage.getItem("github_saved_devices_list");
       if (savedDevices) {
         try {
@@ -211,7 +210,6 @@
       updateDeviceSelectorUI();
     };
 
-    // Hàm lưu danh sách thiết bị vào bộ nhớ trình duyệt
     function saveDevicesToLocalStorage() {
       localStorage.setItem("github_saved_devices_list", JSON.stringify(devicesList));
     }
@@ -267,7 +265,7 @@
             
             if (data.devices && Array.isArray(data.devices)) {
               devicesList = data.devices;
-              saveDevicesToLocalStorage(); // Lưu vào bộ nhớ máy
+              saveDevicesToLocalStorage(); // Lưu vào bộ nhớ máy tự động
               updateDeviceSelectorUI();
               console.log("🔔 Đã tự động cập nhật " + data.count + " thiết bị từ ESP32 lên web!");
             }
@@ -290,27 +288,21 @@
       });
     }
 
-    // Tải danh sách thiết bị trực tiếp từ ESP32 qua mạng LAN (IP)
-    async function syncDevicesFromESP32IP() {
-      let espIp = document.getElementById('espIpInput').value.trim();
-      if (!espIp) {
-        alert("Vui lòng nhập địa chỉ IP của ESP32 trước khi đồng bộ LAN!");
+    // Gửi yêu cầu sync_request qua Adafruit IO để ép ESP32 đẩy danh sách thiết bị lên Cloud ngay lập tức
+    function requestSyncFromESP32() {
+      if (!client || !client.connected) {
+        alert("Vui lòng kết nối Cloud Adafruit IO trước khi đồng bộ!");
         return;
       }
-      localStorage.setItem("esp_ip", espIp);
-
-      try {
-        let response = await fetch(`http://${espIp}/scan`, { mode: 'cors' });
-        if (response.ok) {
-          // Nếu ESP32 trả về danh sách mạng wifi hoặc nếu bạn cấu hình endpoint trả về devices
-          alert("Đã kết nối thành công tới ESP32 qua IP LAN!");
+      
+      client.publish(AIO_TOPIC, "sync_request", { qos: 0 }, (err) => {
+        if (!err) {
+          console.log("📤 Đã gửi yêu cầu đồng bộ (sync_request) tới ESP32 qua Cloud!");
+          alert("Đã gửi yêu cầu đồng bộ! Hãy đợi 2-3 giây để ESP32 cập nhật danh sách lên web.");
         } else {
-          alert("Kết nối được tới ESP32 nhưng phản hồi không hợp lệ.");
+          alert("Gửi lệnh đồng bộ thất bại.");
         }
-      } catch (err) {
-        console.error(err);
-        alert("Không thể kết nối trực tiếp tới IP của ESP32. Hãy đảm bảo điện thoại/máy tính đang kết nối chung mạng WiFi nội bộ với ESP32.");
-      }
+      });
     }
 
     function sendCmd(commandStr) {
@@ -387,13 +379,13 @@
       if (!name) { alert("Vui lòng nhập tên thiết bị!"); return; }
       
       devicesList.push({ name: name, type: type });
-      saveDevicesToLocalStorage(); // Lưu nhớ vào LocalStorage ngay lập tức
+      saveDevicesToLocalStorage(); // Lưu vào bộ nhớ máy tự động
       updateDeviceSelectorUI();
       document.getElementById("deviceSelector").value = devicesList.length - 1;
       changeActiveDevice(devicesList.length - 1);
 
       sendCmd("add_preset," + name + "," + type);
-      alert("Đã thêm remote mới và lưu tự động vào trình duyệt!");
+      alert("Đã thêm remote mới và lưu vào trình duyệt!");
       document.getElementById("presetName").value = "";
     }
 
