@@ -13,10 +13,11 @@
     .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #e74c3c; margin-right: 8px; }
     .status-dot.online { background: #2ecc71; }
 
-    .config-box, .selector-box, .add-preset-box, .irdb-box, .ip-config-box { background: #222634; padding: 12px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #3d445e; text-align: left; }
+    .config-box, .selector-box, .add-preset-box, .irdb-box, .ip-config-box, .sync-box { background: #222634; padding: 12px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #3d445e; text-align: left; }
     select, input { padding: 10px; font-size: 14px; width: 100%; border-radius: 8px; border: 1px solid #4a5475; font-weight: bold; color: #fff; background: #2c3246; box-sizing: border-box; margin-top: 6px; }
     .btn-add { background: #3498db; color: white; border: none; padding: 10px; width: 100%; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 8px; }
     .btn-irdb { background: #27ae60; color: white; border: none; padding: 10px; width: 100%; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 8px; }
+    .btn-sync { background: #2980b9; color: white; border: none; padding: 9px; width: 100%; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 6px; font-size: 12px; }
 
     .voice-box { background: linear-gradient(135deg, #d35400, #e67e22); border-radius: 14px; padding: 12px; margin-bottom: 15px; color: white; }
     .btn-mic { background: #a04000; color: white; border: none; padding: 10px; font-size: 15px; border-radius: 25px; cursor: pointer; font-weight: bold; width: 100%; }
@@ -82,10 +83,17 @@
       <button class="btn-add" onclick="connectMQTT()">LƯU & KẾT NỐI CLOUD</button>
     </div>
 
-    <!-- Hộp nhập IP ESP32 trên LAN để hỗ trợ gọi trực tiếp lệnh IRDB từ GitHub JSON sang ESP32 -->
+    <!-- Hộp nhập IP ESP32 trên LAN -->
     <div class="ip-config-box">
       <h4 style="color:#00b4d8; margin:0 0 6px 0;">🔗 ĐỊA CHỈ IP ESP32 TRÊN LAN (Tùy chọn)</h4>
       <input type="text" id="espIpInput" placeholder="VD: 192.168.1.150" value="">
+    </div>
+
+    <!-- Hộp Đồng bộ & Nhớ máy LocalStorage -->
+    <div class="sync-box">
+      <h4 style="color:#2ecc71; margin:0 0 6px 0;">🔄 ĐỒNG BỘ & LƯU TRỮ CỤ BỘ</h4>
+      <p style="font-size: 11px; color: #a0aec0; margin: 4px 0 8px 0;">Dữ liệu thiết bị sẽ tự lưu trên trình duyệt này. Bạn có thể kết nối nội bộ để lấy danh sách từ ESP32.</p>
+      <button type="button" class="btn-sync" onclick="syncDevicesFromESP32IP()">📥 Kéo danh sách từ ESP32 qua IP LAN</button>
     </div>
 
     <!-- Hộp chọn và gửi mã IR trực tiếp từ kho GitHub (ir_database.json) -->
@@ -166,6 +174,7 @@
     let AIO_TOPIC = "";
     let AIO_SYNC_TOPIC = "";
     
+    // Mặc định danh sách thiết bị ban đầu
     let devicesList = [
       { name: "Smart TV LivingRoom", type: 1 }
     ];
@@ -183,11 +192,29 @@
       if(localStorage.getItem("aio_key")) document.getElementById("aio_key").value = localStorage.getItem("aio_key");
       if(localStorage.getItem("esp_ip")) document.getElementById("espIpInput").value = localStorage.getItem("esp_ip");
 
+      // Khôi phục danh sách thiết bị đã lưu từ LocalStorage nếu có
+      let savedDevices = localStorage.getItem("github_saved_devices_list");
+      if (savedDevices) {
+        try {
+          let parsed = JSON.parse(savedDevices);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            devicesList = parsed;
+          }
+        } catch(e) {
+          console.error("Lỗi đọc LocalStorage devices:", e);
+        }
+      }
+
       if(localStorage.getItem("aio_user") && localStorage.getItem("aio_key")) {
         connectMQTT();
       }
       updateDeviceSelectorUI();
     };
+
+    // Hàm lưu danh sách thiết bị vào bộ nhớ trình duyệt
+    function saveDevicesToLocalStorage() {
+      localStorage.setItem("github_saved_devices_list", JSON.stringify(devicesList));
+    }
 
     function connectMQTT() {
       const user = document.getElementById("aio_user").value.trim();
@@ -236,12 +263,13 @@
         if (topic.includes("device-sync")) {
           try {
             let data = JSON.parse(payload.toString());
-            console.log("🔄 Nhận danh sách thiết bị đồng bộ từ nhà: ", data);
+            console.log("🔄 Nhận danh sách thiết bị đồng bộ từ ESP32: ", data);
             
             if (data.devices && Array.isArray(data.devices)) {
               devicesList = data.devices;
+              saveDevicesToLocalStorage(); // Lưu vào bộ nhớ máy
               updateDeviceSelectorUI();
-              console.log("🔔 Đã tự động cập nhật " + data.count + " thiết bị từ nhà lên web!");
+              console.log("🔔 Đã tự động cập nhật " + data.count + " thiết bị từ ESP32 lên web!");
             }
           } catch(e) {
             console.error("Lỗi parse JSON sync từ ESP32:", e);
@@ -260,6 +288,29 @@
         document.getElementById('dot').className = 'status-dot';
         console.warn("⚠️ Mất kết nối tới Cloud. Đang tự động thử lại...");
       });
+    }
+
+    // Tải danh sách thiết bị trực tiếp từ ESP32 qua mạng LAN (IP)
+    async function syncDevicesFromESP32IP() {
+      let espIp = document.getElementById('espIpInput').value.trim();
+      if (!espIp) {
+        alert("Vui lòng nhập địa chỉ IP của ESP32 trước khi đồng bộ LAN!");
+        return;
+      }
+      localStorage.setItem("esp_ip", espIp);
+
+      try {
+        let response = await fetch(`http://${espIp}/scan`, { mode: 'cors' });
+        if (response.ok) {
+          // Nếu ESP32 trả về danh sách mạng wifi hoặc nếu bạn cấu hình endpoint trả về devices
+          alert("Đã kết nối thành công tới ESP32 qua IP LAN!");
+        } else {
+          alert("Kết nối được tới ESP32 nhưng phản hồi không hợp lệ.");
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Không thể kết nối trực tiếp tới IP của ESP32. Hãy đảm bảo điện thoại/máy tính đang kết nối chung mạng WiFi nội bộ với ESP32.");
+      }
     }
 
     function sendCmd(commandStr) {
@@ -322,8 +373,9 @@
     }
 
     function resetAllDevicesCloud() {
-      if (confirm("Bạn có chắc chắn muốn xóa hết tất cả thiết bị trên ESP32 không?")) {
+      if (confirm("Bạn có chắc chắn muốn xóa hết tất cả thiết bị không?")) {
         devicesList = [];
+        saveDevicesToLocalStorage();
         updateDeviceSelectorUI();
         sendCmd("reset_all");
       }
@@ -335,12 +387,13 @@
       if (!name) { alert("Vui lòng nhập tên thiết bị!"); return; }
       
       devicesList.push({ name: name, type: type });
+      saveDevicesToLocalStorage(); // Lưu nhớ vào LocalStorage ngay lập tức
       updateDeviceSelectorUI();
       document.getElementById("deviceSelector").value = devicesList.length - 1;
       changeActiveDevice(devicesList.length - 1);
 
       sendCmd("add_preset," + name + "," + type);
-      alert("Đã gửi lệnh thêm remote mới tới ESP32!");
+      alert("Đã thêm remote mới và lưu tự động vào trình duyệt!");
       document.getElementById("presetName").value = "";
     }
 
@@ -348,6 +401,7 @@
       let devIdx = parseInt(document.getElementById("deviceSelector").value);
       if (devicesList.length > 0 && !isNaN(devIdx) && devIdx >= 0 && devIdx < devicesList.length) {
         devicesList.splice(devIdx, 1);
+        saveDevicesToLocalStorage(); // Cập nhật lại LocalStorage
         updateDeviceSelectorUI();
         if(devicesList.length > 0) {
           document.getElementById("deviceSelector").value = 0;
@@ -464,7 +518,7 @@
             <div class="pill-box"><button onclick="sendAction('ch_up')">CH+</button><button onclick="sendAction('ch_down')">CH-</button></div>
           </div>
           <div class="grid-2" style="margin-top:10px;"><button class="btn-cmd" style="background:#e50914; color:white;" onclick="sendAction('netflix')">NETFLIX</button><button class="btn-cmd" style="background:#ff0000; color:white;" onclick="sendAction('youtube')">YOUTUBE</button></div>
-          <div class="grid-2"><button class="btn-cmd" style="background:#00a8e1; color:white;" onclick="sendAction('prime')">PRIME VIDEO</button><button class="btn-cmd" style="background:#tclchannel">TCL CHANNEL</button></div>
+          <div class="grid-2"><button class="btn-cmd" style="background:#00a8e1; color:white;" onclick="sendAction('prime')">PRIME VIDEO</button><button class="btn-cmd" style="background:#ff6600; color:white;" onclick="sendAction('tclchannel')">TCL CHANNEL</button></div>
         </div>`;
       }
       else if (typeVal === 5) {
